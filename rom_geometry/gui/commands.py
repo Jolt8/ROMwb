@@ -15,9 +15,9 @@ from rom_geometry.core.export_json import ExportRefusedError
 from rom_geometry.gui import icon_path
 from rom_geometry.gui.view_providers import attach_view_provider
 from rom_geometry.objects.object_helpers import object_type
-from rom_geometry.objects.rom_model import create_rom_model, engine_axis_of_model, export_rom_model, find_rom_models, validate_rom_model
+from rom_geometry.objects.rom_model import create_rom_model, export_rom_model, find_rom_models, validate_rom_model
 from rom_geometry.objects.rom_region import create_rom_region
-from rom_geometry.objects.source_features import create_cavity, create_fastener_parts
+from rom_geometry.objects.source_features import create_fastener_parts
 
 
 def find_target_model(create_if_missing):
@@ -84,7 +84,7 @@ class CreateROMModelCommand:
 
 class AddRegionCommand:
     def GetResources(self):
-        return {"Pixmap": icon_path("rom_region.svg"), "MenuText": "Add Region", "ToolTip": "Add a region from the selected solid(s): fused, cut to a z (and r) range, split into axial cells."}
+        return {"Pixmap": icon_path("rom_region.svg"), "MenuText": "Add Region", "ToolTip": "Add a region from the selected solid(s): fused, cut to a z (and r) range, split into axial cells. Tick 'Inverse' in the panel for a fluid region (the empty space around the selected solids)."}
 
     def IsActive(self):
         return App.ActiveDocument is not None
@@ -96,14 +96,8 @@ class AddRegionCommand:
         doc = model_object.Document
         source_objects = [source_object for source_object in selected_shape_objects() if object_type(source_object) != "ROMRegion"]
 
-        existing_region_count = len([child for child in model_object.Group if object_type(child) == "ROMRegion"])
-        if len(source_objects) == 1:
-            default_region_name = source_objects[0].Label
-        else:
-            default_region_name = f"region_{existing_region_count + 1}"
-
         doc.openTransaction("Add ROM region")
-        region_object = create_rom_region(model_object, default_region_name, source_objects)
+        region_object = create_rom_region(model_object, None, source_objects)
         attach_view_provider(region_object)
         doc.commitTransaction()
         doc.recompute()
@@ -112,47 +106,22 @@ class AddRegionCommand:
         Gui.getDocument(doc.Name).setEdit(region_object.Name, 0)
 
 
-class MakeCavityCommand:
-    def GetResources(self):
-        return {"Pixmap": icon_path("rom_cavity.svg"), "MenuText": "Make Cavity Solid", "ToolTip": "Fluid volume: an axial cylinder around the selected solids, minus those solids. Set Enclosure to use your own enclosing solid instead."}
-
-    def IsActive(self):
-        return len(selected_shape_objects()) > 0
-
-    def Activated(self):
-        subtracted_objects = selected_shape_objects()
-        model_object = find_target_model(create_if_missing=False)
-        if model_object is not None:
-            doc = model_object.Document
-            engine_axis = engine_axis_of_model(model_object)
-        else:
-            doc = App.ActiveDocument
-            engine_axis = None
-
-        doc.openTransaction("Make cavity solid")
-        cavity_object = create_cavity(doc, subtracted_objects, label="cavity", engine_axis=engine_axis)
-        if model_object is not None and model_object.Axis is not None:
-            cavity_object.Axis = model_object.Axis
-        attach_view_provider(cavity_object)
-        doc.commitTransaction()
-        doc.recompute()
-        App.Console.PrintMessage(f"ROM Geometry: {cavity_object.Label}: {cavity_object.Status}\n")
-
-
 class SplitFastenerCommand:
     def GetResources(self):
-        return {"Pixmap": icon_path("rom_fastener.svg"), "MenuText": "Split Fastener Between Bodies", "ToolTip": "Select the fastener, then body A, then body B. Makes two halves, cut on the bodies' contact plane, to add to each body's region."}
+        return {"Pixmap": icon_path("rom_fastener.svg"), "MenuText": "Split Fastener Between Bodies", "ToolTip": "Select the fastener, then body A, then body B. Makes two halves in the ROM model, cut on the bodies' contact plane, to add to each body's region."}
 
     def IsActive(self):
         return len(selected_shape_objects()) == 3
 
     def Activated(self):
         fastener_object, body_a_object, body_b_object = selected_shape_objects()
-        model_object = find_target_model(create_if_missing=False)
-        doc = model_object.Document if model_object is not None else App.ActiveDocument
+        model_object = find_target_model(create_if_missing=True)
+        if model_object is None:
+            return
+        doc = model_object.Document
 
         doc.openTransaction("Split fastener")
-        fastener_part_a, fastener_part_b = create_fastener_parts(doc, fastener_object, body_a_object, body_b_object)
+        fastener_part_a, fastener_part_b = create_fastener_parts(doc, fastener_object, body_a_object, body_b_object, model_object)
         attach_view_provider(fastener_part_a)
         attach_view_provider(fastener_part_b)
         doc.commitTransaction()
@@ -213,7 +182,6 @@ class ExportCommand:
 TOOLBAR_COMMANDS = [
     "ROMGeometry_CreateModel",
     "ROMGeometry_AddRegion",
-    "ROMGeometry_MakeCavity",
     "ROMGeometry_SplitFastener",
     "ROMGeometry_Validate",
     "ROMGeometry_Export",
@@ -221,7 +189,6 @@ TOOLBAR_COMMANDS = [
 
 Gui.addCommand("ROMGeometry_CreateModel", CreateROMModelCommand())
 Gui.addCommand("ROMGeometry_AddRegion", AddRegionCommand())
-Gui.addCommand("ROMGeometry_MakeCavity", MakeCavityCommand())
 Gui.addCommand("ROMGeometry_SplitFastener", SplitFastenerCommand())
 Gui.addCommand("ROMGeometry_Validate", ValidateCommand())
 Gui.addCommand("ROMGeometry_Export", ExportCommand())

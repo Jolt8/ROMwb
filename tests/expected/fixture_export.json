@@ -6,7 +6,7 @@
   "freecad_version": "1.1.4"
  },
  "source_document": "tests/rom_fixture.FCStd (built by tests/build_fixture.py)",
- "exported_at": "2026-10-30T22:55:58-06:00",
+ "exported_at": "2026-10-31T01:46:32-06:00",
  "axis": {
   "origin": [
    0.0,
@@ -69,6 +69,7 @@
    "source_shapes": [
     "cavity"
    ],
+   "inverted": false,
    "z_min": 0.0,
    "z_max": 0.06,
    "r_min": null,
@@ -88,6 +89,7 @@
    "source_shapes": [
     "liner"
    ],
+   "inverted": false,
    "z_min": 0.0,
    "z_max": 0.06,
    "r_min": null,
@@ -107,6 +109,7 @@
    "source_shapes": [
     "housing"
    ],
+   "inverted": false,
    "z_min": 0.0,
    "z_max": 0.06,
    "r_min": null,
@@ -125,6 +128,7 @@
    "source_shapes": [
     "end_cap"
    ],
+   "inverted": false,
    "z_min": 0.06,
    "z_max": 0.065,
    "r_min": null,
@@ -142,6 +146,7 @@
    "source_shapes": [
     "end_cap"
    ],
+   "inverted": false,
    "z_min": 0.06,
    "z_max": 0.065,
    "r_min": 0.018000000000000002,
@@ -159,6 +164,7 @@
    "source_shapes": [
     "nozzle"
    ],
+   "inverted": false,
    "z_min": -0.010199999999999999,
    "z_max": -0.0002,
    "r_min": null,

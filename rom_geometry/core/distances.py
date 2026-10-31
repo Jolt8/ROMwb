@@ -19,7 +19,7 @@ so every face needs the distance that makes that formula right for its shape.
 
 import math
 
-import FreeCAD as App
+from rom_geometry.core.axis_geometry import largest_radius_of_shape
 
 
 RADIAL_NODE_RULES = ("geometric_mean", "arithmetic_mean", "area_mean")
@@ -164,12 +164,5 @@ def cell_radial_extent(cell_solid, engine_axis, axial_start, axial_end):
     """
     axis_line = engine_axis.make_axis_line(axial_start - 1.0, axial_end + 1.0)
     r_inner = axis_line.distToShape(cell_solid)[0]
-
-    r_outer = 0.0
-    for edge in cell_solid.Edges:
-        for edge_point in edge.discretize(64):
-            edge_point_radius = engine_axis.radial_distance(App.Vector(edge_point))
-            if edge_point_radius > r_outer:
-                r_outer = edge_point_radius
-
+    r_outer = largest_radius_of_shape(cell_solid, engine_axis)
     return r_inner, r_outer

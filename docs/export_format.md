@@ -50,9 +50,20 @@ skipped with a warning.
 
 ### `regions[]`
 
-`name, material, source_shapes (labels), z_min, z_max, r_min, r_max
+`name, material, source_shapes (labels), inverted, z_min, z_max, r_min, r_max
 (null = unbounded), n_axial_cells, cell_ids, z_min_expression,
 z_max_expression`.
+
+`inverted: true` marks a fluid region: the empty space inside its limits that
+its `source_shapes` do not fill. With `r_max: null`, its outer limit was the
+sources' largest radius. Source-volume coverage is not reported for inverted
+regions.
+
+`z_min_expression` / `z_max_expression` record how the limit was defined, for
+traceability: the expression (e.g. `table_hybrid#Spreadsheet.pre_combustion_chamber_length`),
+a plain value (`"0 mm"`), or a reference
+(`"reference hybrid_assembly_for_cfd#fuel_grain.fuel_grain_bottom_lcs + 2 mm"`).
+`z_min` / `z_max` hold the evaluated values.
 
 The **region order** sets cell numbering (region by region, increasing z
 inside each region) and the direction of interface face sets.

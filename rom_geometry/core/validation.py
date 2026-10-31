@@ -140,6 +140,8 @@ def validate_rom_geometry(build):
     regions_using_source = {}
     for region_geometry in build.region_geometries:
         region_spec = region_geometry.spec
+        if region_spec.invert:
+            continue  # an inverted (fluid) region uses the space around its sources, not the sources
         for source_label, source_shape in zip(region_spec.source_labels, region_spec.source_shapes):
             source_shape_by_label.setdefault(source_label, source_shape)
             regions_using_source.setdefault(source_label, []).append(region_geometry)

@@ -30,8 +30,8 @@ import Part
 import build_fixture
 from rom_geometry.core.export_json import export_rom_geometry
 from rom_geometry.objects.rom_model import create_rom_model, export_rom_model, find_rom_models, rom_regions_of_model
-from rom_geometry.objects.rom_region import create_rom_region
-from rom_geometry.objects.source_features import create_cavity, create_fastener_parts
+from rom_geometry.objects.rom_region import create_rom_region, region_spec_from_object
+from rom_geometry.objects.source_features import create_fastener_parts
 
 
 ROM_DOCUMENT_NAME = "rom_model_doc"
@@ -181,12 +181,49 @@ class ROMObjectTests(unittest.TestCase):
         self.assertEqual(len(script_export["cells"]), 11)
         self.assertEqual(script_export["validation"]["errors"], [])
 
-    def test_cavity_feature_from_housing_and_liner(self):
-        cavity_object = create_cavity(self.rom_doc, [self.fixture_doc.getObject("housing"), self.fixture_doc.getObject("liner")], label="test_cavity")
+    def test_headless_script_cell_overrides_are_not_saved(self):
+        output_path = os.path.join(self.temporary_directory.name, "overridden.json")
+        script_path = os.path.join(REPOSITORY_ROOT, "scripts", "export_headless.py")
+        script_arguments = [sys.executable, script_path, self.rom_document_path, output_path, "--cells", "*=1", "--cells", "liner=5"]
+        script_result = subprocess.run(script_arguments, capture_output=True, text=True)
+        self.assertEqual(script_result.returncode, 0, script_result.stdout + script_result.stderr)
+        with open(output_path, encoding="utf-8") as exported_file:
+            script_export = json.load(exported_file)
+
+        # cavity 1 + liner 5 + housing 1 + end caps 1 + 1 + nozzle 1
+        self.assertEqual(len(script_export["cells"]), 10)
+        self.assertEqual(len(script_export["cellsets"]["liner"]), 5)
+        self.assertEqual(self.region("liner").NAxialCells, 3)
+
+        bad_result = subprocess.run([sys.executable, script_path, self.rom_document_path, output_path, "--cells", "no_such_region=2"], capture_output=True, text=True)
+        self.assertEqual(bad_result.returncode, 2)
+        self.assertIn("no region named", bad_result.stdout)
+
+    def test_inverse_region_from_housing_and_liner(self):
+        surrounding_solids = [self.fixture_doc.getObject("housing"), self.fixture_doc.getObject("liner")]
+        fluid_region = create_rom_region(self.model_object, "test_fluid", surrounding_solids, inverse=True)
+        fluid_region.NAxialCells = 2
         self.rom_doc.recompute()
-        self.assertAlmostEqual(cavity_object.CylinderRadius.Value, 24.0, places=6)
-        self.assertRelativelyClose(cavity_object.Shape.Volume, math.pi * 18.0 ** 2 * 60.0)
-        self.rom_doc.removeObject(cavity_object.Name)
+        try:
+            self.assertAlmostEqual(fluid_region.ZMax.Value, 60.0, places=9)
+            self.assertEqual(len(fluid_region.Shape.Solids), 2)
+            self.assertRelativelyClose(fluid_region.Shape.Volume, math.pi * 18.0 ** 2 * 60.0)
+        finally:
+            self.rom_doc.removeObject(fluid_region.Name)
+            self.rom_doc.recompute()
+
+    def test_default_region_names(self):
+        housing = self.fixture_doc.getObject("housing")
+        first_region = create_rom_region(self.model_object, None, [housing])
+        second_region = create_rom_region(self.model_object, None, [housing])
+        try:
+            self.assertEqual(first_region.RegionName, "housing_region")
+            self.assertEqual(first_region.Label, "housing_region")
+            self.assertEqual(second_region.RegionName, "housing_region_2")
+        finally:
+            self.rom_doc.removeObject(first_region.Name)
+            self.rom_doc.removeObject(second_region.Name)
+            self.rom_doc.recompute()
 
 
 class SourceFeatureTests(unittest.TestCase):
@@ -205,8 +242,13 @@ class SourceFeatureTests(unittest.TestCase):
         bolt = self.doc.addObject("Part::Feature", "bolt")
         bolt.Shape = Part.makeCylinder(2.0, 12.0, App.Vector(20, 0, -1))
 
-        part_for_a, part_for_b = create_fastener_parts(self.doc, bolt, plate_a, plate_b)
+        model_object = create_rom_model(self.doc)
+        part_for_a, part_for_b = create_fastener_parts(self.doc, bolt, plate_a, plate_b, model_object)
         self.doc.recompute()
+
+        # Everything the workbench makes lives inside the ROM model.
+        self.assertIn(part_for_a, model_object.Group)
+        self.assertIn(part_for_b, model_object.Group)
 
         self.assertAlmostEqual(part_for_a.Shape.Volume, math.pi * 4.0 * 6.0, places=6)
         self.assertAlmostEqual(part_for_b.Shape.Volume, math.pi * 4.0 * 6.0, places=6)
@@ -246,6 +288,187 @@ class SourceFeatureTests(unittest.TestCase):
         self.assertEqual(len(cell_x_extents), 2)
         self.assertAlmostEqual(cell_x_extents[0][1], 10.0, places=9)
         self.assertAlmostEqual(region_object.Shape.Volume, math.pi * 25.0 * 20.0, places=6)
+
+
+class LimitReferenceTests(unittest.TestCase):
+    """Assembly4-style layout:
+      part document:      Body with bottom_lcs (z = 2) and top_lcs (z = 18),
+                          plus a 20 mm tall, r = 10 mm cylinder
+      assembly document:  App::Part container at z = 50, holding links to the
+                          Body and to the cylinder, each placed at z = 100
+      ROM document:       the region, referencing through those links.
+    So in the assembly the cylinder spans z = 150..170, bottom_lcs is at
+    z = 152 and top_lcs at z = 168."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.temporary_directory = tempfile.TemporaryDirectory()
+        directory = cls.temporary_directory.name
+
+        part_doc = App.newDocument("reference_part")
+        part_doc.saveAs(os.path.join(directory, "reference_part.FCStd"))
+        body = part_doc.addObject("PartDesign::Body", "Body")
+        for lcs_name, lcs_z in (("bottom_lcs", 2.0), ("top_lcs", 18.0)):
+            lcs = part_doc.addObject("PartDesign::CoordinateSystem", lcs_name)
+            body.addObject(lcs)
+            lcs.Placement.Base = App.Vector(0, 0, lcs_z)
+        cylinder = part_doc.addObject("Part::Cylinder", "cylinder")
+        cylinder.Radius = 10.0
+        cylinder.Height = 20.0
+        part_doc.recompute()
+        part_doc.save()
+
+        assembly_doc = App.newDocument("reference_assembly")
+        assembly_doc.saveAs(os.path.join(directory, "reference_assembly.FCStd"))
+        container = assembly_doc.addObject("App::Part", "Assembly")
+        container.Placement.Base = App.Vector(0, 0, 50)
+        body_link = assembly_doc.addObject("App::Link", "BodyLink")
+        body_link.LinkedObject = body
+        body_link.Placement.Base = App.Vector(0, 0, 100)
+        cylinder_link = assembly_doc.addObject("App::Link", "CylinderLink")
+        cylinder_link.LinkedObject = cylinder
+        cylinder_link.Placement.Base = App.Vector(0, 0, 100)
+        container.addObject(body_link)
+        container.addObject(cylinder_link)
+        assembly_doc.recompute()
+        assembly_doc.save()
+
+        cls.rom_doc = App.newDocument("reference_rom")
+        cls.rom_doc.saveAs(os.path.join(directory, "reference_rom.FCStd"))
+        cls.container = container
+        cls.body_link = body_link
+        cls.cylinder_link = cylinder_link
+        cls.model_object = create_rom_model(cls.rom_doc)
+
+    @classmethod
+    def tearDownClass(cls):
+        for document_name in list(App.listDocuments()):
+            App.closeDocument(document_name)
+        cls.temporary_directory.cleanup()
+
+    def new_region(self, region_name):
+        return create_rom_region(self.model_object, region_name, [self.cylinder_link], z_min=0.0, z_max=1.0)
+
+    def test_lcs_references_through_assembly_links(self):
+        region_object = self.new_region("between_lcs")
+        # Picked via the container's tree path, and via the link itself.
+        region_object.ZMinReference = (self.container, ["BodyLink.bottom_lcs."])
+        region_object.ZMaxReference = (self.body_link, ["top_lcs."])
+        region_object.ZMaxOffset = -1.0
+        region_object.NAxialCells = 3
+        self.rom_doc.recompute()
+
+        self.assertAlmostEqual(region_object.ZMin.Value, 152.0, places=9)
+        self.assertAlmostEqual(region_object.ZMax.Value, 167.0, places=9)
+        self.assertAlmostEqual(region_object.Shape.Volume, math.pi * 100.0 * 15.0, places=6)
+        self.assertEqual(len(region_object.Shape.Solids), 3)
+
+        region_spec = region_spec_from_object(region_object)
+        self.assertEqual(region_spec.z_min_expression, "reference reference_assembly#Assembly.BodyLink.bottom_lcs")
+        self.assertEqual(region_spec.z_max_expression, "reference reference_assembly#BodyLink.top_lcs - 1 mm")
+
+    def test_face_references_give_z_and_r(self):
+        region_object = self.new_region("from_faces")
+        cylinder_faces = self.cylinder_link.LinkedObject.Shape.Faces
+        side_face_name = f"Face{[index for index, face in enumerate(cylinder_faces, start=1) if face.Surface.__class__.__name__ == 'Cylinder'][0]}"
+        top_face_name = f"Face{[index for index, face in enumerate(cylinder_faces, start=1) if face.Surface.__class__.__name__ == 'Plane' and face.CenterOfMass.z > 10][0]}"
+
+        region_object.ZMinReference = (self.body_link, ["bottom_lcs."])
+        region_object.ZMaxReference = (self.cylinder_link, [top_face_name])
+        region_object.RMaxReference = (self.cylinder_link, [side_face_name])
+        region_object.RMaxOffset = -2.0
+        self.rom_doc.recompute()
+
+        self.assertAlmostEqual(region_object.ZMax.Value, 170.0, places=9)
+        self.assertAlmostEqual(region_object.RMax.Value, 8.0, places=9)
+        self.assertAlmostEqual(region_object.Shape.Volume, math.pi * 64.0 * 18.0, places=6)
+
+        # A planar face has no radius: clear error, empty shape.
+        region_object.RMaxReference = (self.cylinder_link, [top_face_name])
+        self.rom_doc.recompute()
+        self.assertIn("gives no radial position", region_object.Status)
+        self.assertTrue(region_object.Shape.isNull())
+
+    def test_reference_replaces_an_expression(self):
+        region_object = self.new_region("reference_wins")
+        region_object.setExpression("ZMin", "140 mm")
+        self.rom_doc.recompute()
+        self.assertAlmostEqual(region_object.ZMin.Value, 140.0, places=9)
+
+        region_object.ZMinReference = (self.body_link, ["bottom_lcs."])
+        region_object.ZMaxReference = (self.body_link, ["top_lcs."])
+        self.rom_doc.recompute()
+        self.assertAlmostEqual(region_object.ZMin.Value, 152.0, places=9)
+        self.assertNotIn("ZMin", [bound_property for bound_property, expression in region_object.ExpressionEngine])
+
+    def test_references_survive_save_and_reopen(self):
+        region_object = self.new_region("reopened")
+        region_object.ZMinReference = (self.container, ["BodyLink.bottom_lcs."])
+        region_object.ZMaxReference = (self.body_link, ["top_lcs."])
+        self.rom_doc.recompute()
+        self.rom_doc.save()
+        region_name = region_object.Name
+        rom_path = self.rom_doc.FileName
+
+        App.closeDocument(self.rom_doc.Name)
+        reopened_doc = App.openDocument(rom_path)
+        reopened_doc.recompute()
+        reopened_region = reopened_doc.getObject(region_name)
+        self.assertEqual(reopened_region.ZMinReference[1], ["BodyLink.bottom_lcs."])
+        self.assertAlmostEqual(reopened_region.ZMax.Value, 168.0, places=9)
+
+        type(self).rom_doc = reopened_doc
+        type(self).model_object = find_rom_models(reopened_doc)[0]
+        type(self).container = App.getDocument("reference_assembly").getObject("Assembly")
+        type(self).body_link = App.getDocument("reference_assembly").getObject("BodyLink")
+        type(self).cylinder_link = App.getDocument("reference_assembly").getObject("CylinderLink")
+
+    def test_regions_saved_before_references_get_the_new_properties(self):
+        region_object = self.new_region("old_region")
+        for limit_name in ("ZMin", "ZMax", "RMin", "RMax"):
+            region_object.removeProperty(f"{limit_name}Reference")
+            region_object.removeProperty(f"{limit_name}Offset")
+        for property_name in ("Inverse", "KeepOnlyLargestPiece", "ReferenceElementKinds"):
+            region_object.removeProperty(property_name)
+        region_object.Proxy.onDocumentRestored(region_object)
+        self.assertIn("ZMinReference", region_object.PropertiesList)
+        self.assertIn("RMaxOffset", region_object.PropertiesList)
+        self.assertFalse(region_object.Inverse)
+        self.assertTrue(region_object.KeepOnlyLargestPiece)
+
+    def test_renumbered_reference_element_fails_loudly(self):
+        # Pick the cylinder's side face for RMax, then edit the CAD so the
+        # same element name points at a different kind of face. The region
+        # must stop with a "re-pick" error instead of using the wrong face.
+        part_doc = App.getDocument("reference_part")
+        replacement_box = part_doc.addObject("Part::Box", "replacement_box")
+        part_doc.recompute()
+
+        region_object = self.new_region("guarded")
+        region_object.ZMinReference = (self.body_link, ["bottom_lcs."])
+        region_object.ZMaxReference = (self.body_link, ["top_lcs."])
+        side_face_index = [index for index, face in enumerate(self.cylinder_link.LinkedObject.Shape.Faces, start=1) if face.Surface.__class__.__name__ == "Cylinder"][0]
+        region_object.RMaxReference = (self.cylinder_link, [f"Face{side_face_index}"])
+        self.rom_doc.recompute()
+        self.assertEqual(dict(region_object.ReferenceElementKinds)["RMax"], "Face:Cylinder")
+        self.assertFalse(region_object.Shape.isNull())
+
+        original_cylinder = self.cylinder_link.LinkedObject
+        try:
+            self.cylinder_link.LinkedObject = replacement_box
+            self.cylinder_link.Document.recompute()
+            region_object.touch()
+            self.rom_doc.recompute()
+            self.assertIn("please re-pick", region_object.Status)
+            self.assertTrue(region_object.Shape.isNull())
+        finally:
+            self.cylinder_link.LinkedObject = original_cylinder
+            self.cylinder_link.Document.recompute()
+
+        # Re-picking clears the old record and the region works again.
+        region_object.RMaxReference = (self.cylinder_link, [f"Face{side_face_index}"])
+        self.rom_doc.recompute()
+        self.assertFalse(region_object.Shape.isNull())
 
 
 if __name__ == "__main__":

@@ -4,13 +4,17 @@ split into equal-length axial cells.
 A region is a modelling decision, not a CAD object. The same CAD body can be
 used by several regions (e.g. the housing split into top / middle / bottom),
 and one region can fuse several bodies.
+
+An inverted region is the opposite: the EMPTY space inside its limits that
+the sources do not fill. That is how fluid regions (fluid_domain,
+pre_chamber, ...) are made, since they are not CAD bodies.
 """
 
 from dataclasses import dataclass, field
 
 import Part
 
-from rom_geometry.core.axis_geometry import total_bounding_box
+from rom_geometry.core.axis_geometry import largest_radius_of_shape, total_bounding_box
 from rom_geometry.core.source_shapes import merge_source_shapes
 
 
@@ -20,6 +24,11 @@ class RegionSpec:
 
     r_min / r_max of 0 mean "unbounded". source_shapes must already carry
     their global placement (use Part.getShape on the source objects).
+
+    invert=True makes the region the empty space inside the limits minus the
+    sources. Its unbounded r_max is then the sources' largest radius (the
+    engine envelope), not infinity. keep_largest_piece drops the small voids
+    (seal grooves, gaps outside a flange) an inversion leaves behind.
     """
     name: str
     material: str
@@ -32,6 +41,8 @@ class RegionSpec:
     n_axial_cells: int = 1
     z_min_expression: str = ""
     z_max_expression: str = ""
+    invert: bool = False
+    keep_largest_piece: bool = True
 
 
 @dataclass
@@ -75,8 +86,12 @@ def build_region_geometry(region_spec, engine_axis, fuzzy_tolerance):
     source_bounding_box = total_bounding_box(region_spec.source_shapes)
     unbounded_radius = engine_axis.radial_distance(source_bounding_box.Center) + source_bounding_box.DiagonalLength + 1.0
 
+    # For an inverted region "unbounded" means the engine envelope: the
+    # largest radius any source reaches. Beyond it is the outside world.
     if radial_range_is_bounded:
         outer_radius = region_spec.r_max
+    elif region_spec.invert:
+        outer_radius = largest_radius_of_shape(fused_source_shape, engine_axis)
     else:
         outer_radius = unbounded_radius
 
@@ -86,11 +101,24 @@ def build_region_geometry(region_spec, engine_axis, fuzzy_tolerance):
         inner_exclusion = engine_axis.make_axial_cylinder(region_spec.r_min, region_spec.z_min, region_spec.z_max)
         bounding_volume = bounding_volume.cut(inner_exclusion)
 
-    region_solid = fused_source_shape.common(bounding_volume)
+    if region_spec.invert:
+        # Empty space = bounding volume minus every source.
+        region_solid = bounding_volume.cut(fused_source_shape.Solids, fuzzy_tolerance)
+        empty_space_pieces = list(region_solid.Solids)
+        if region_spec.keep_largest_piece and len(empty_space_pieces) > 1:
+            largest_piece = max(empty_space_pieces, key=lambda piece: piece.Volume)
+            dropped_volume = region_solid.Volume - largest_piece.Volume
+            warnings.append(f"region '{region_name}': inverted; kept the largest empty space and dropped {len(empty_space_pieces) - 1} smaller void(s) totalling {dropped_volume:.6g} mm^3")
+            region_solid = largest_piece
+    else:
+        region_solid = fused_source_shape.common(bounding_volume)
     region_solid_count = len(region_solid.Solids)
 
     if region_solid_count == 0 or region_solid.Volume <= 0:
-        errors.append(f"region '{region_name}': empty. The sources do not intersect z = [{region_spec.z_min}, {region_spec.z_max}] mm" + (f", r = [{region_spec.r_min}, {region_spec.r_max}] mm" if radial_range_is_bounded or region_spec.r_min > 0 else ""))
+        if region_spec.invert:
+            errors.append(f"region '{region_name}': empty. The sources fill all of z = [{region_spec.z_min}, {region_spec.z_max}] mm, r < {outer_radius:.6g} mm")
+        else:
+            errors.append(f"region '{region_name}': empty. The sources do not intersect z = [{region_spec.z_min}, {region_spec.z_max}] mm" + (f", r = [{region_spec.r_min}, {region_spec.r_max}] mm" if radial_range_is_bounded or region_spec.r_min > 0 else ""))
         return RegionGeometry(region_spec, None, [], [], errors, warnings)
 
     if region_solid_count > 1:

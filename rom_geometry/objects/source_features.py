@@ -1,14 +1,14 @@
 """Parametric helper solids that a region can use as sources:
 
-  ROMCavity        fluid volume = enclosing solid (or an axial cylinder)
-                   minus solid parts. Fluid regions (fluid_domain,
-                   pre_chamber, ...) are empty space, not CAD bodies.
   ROMFastenerPart  one side of a fastener that crosses from one body into
                    another, cut on the bodies' contact plane.
+  ROMCavity        (superseded by ROMRegion.Inverse; kept so older documents
+                   still open) fluid volume = enclosing solid or an axial
+                   cylinder, minus solid parts.
 
 Both recompute when the CAD they link to changes. Their Shape is in global
-coordinates, so keep them at the top level of the document (not inside an
-App::Part container).
+coordinates, so keep them in the ROM model group or at the top level of the
+document, not inside an App::Part container.
 """
 
 import FreeCAD as App
@@ -166,8 +166,9 @@ def create_cavity(doc, subtracted_objects, label="cavity", engine_axis=None):
     return cavity_object
 
 
-def create_fastener_parts(doc, fastener_object, body_a_object, body_b_object):
-    """Two ROMFastenerPart objects, one per side. Returns (part_a, part_b)."""
+def create_fastener_parts(doc, fastener_object, body_a_object, body_b_object, model_object=None):
+    """Two ROMFastenerPart objects, one per side, placed inside the ROM model
+    if one is given. Returns (part_a, part_b)."""
     fastener_parts = []
     for side, body_object in (("BodyA", body_a_object), ("BodyB", body_b_object)):
         fastener_part = doc.addObject("Part::FeaturePython", "ROMFastenerPart")
@@ -177,5 +178,7 @@ def create_fastener_parts(doc, fastener_object, body_a_object, body_b_object):
         fastener_part.BodyA = body_a_object
         fastener_part.BodyB = body_b_object
         fastener_part.Side = side
+        if model_object is not None:
+            model_object.addObject(fastener_part)
         fastener_parts.append(fastener_part)
     return fastener_parts[0], fastener_parts[1]

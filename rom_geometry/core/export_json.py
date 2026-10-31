@@ -86,6 +86,7 @@ def build_export_dict(build, report):
             "name": region_spec.name,
             "material": region_spec.material,
             "source_shapes": list(region_spec.source_labels),
+            "inverted": region_spec.invert,
             "z_min": region_spec.z_min * MILLIMETRE_TO_METRE,
             "z_max": region_spec.z_max * MILLIMETRE_TO_METRE,
             "r_min": _length_or_null(region_spec.r_min),

@@ -15,7 +15,7 @@ boundary faces, the gaps and the overlaps, and computes the distances.
 | phase | content | state |
 |---|---|---|
 | 1 | headless geometry core, fixture, tests; merge parts / split fasteners | **done** |
-| 2 | the workbench: toolbar, `ROMModel` / `ROMRegion` objects, region task panel, coloured preview, Make Cavity / Split Fastener, Validate / Export (text report), `scripts/export_headless.py` | **done** |
+| 2 | the workbench: toolbar, `ROMModel` / `ROMRegion` objects (incl. inverse / fluid regions, LCS and face references), region task panel, coloured preview, Split Fastener, Validate / Export (text report), `scripts/export_headless.py` | **done** |
 | 3 | boundary-patch picking + fingerprints, interface review panel with ignore toggles | core functions done (`core/boundary_patches.py`), GUI not started |
 | 4 | Julia loader in FVMFramework | not started |
 
@@ -25,15 +25,18 @@ in `unassigned_boundary_faces`. Interfaces can already be ignored by typing
 
 ## Install
 
-Clone (or copy) this folder into FreeCAD 1.1's user Mod folder and restart
-FreeCAD. The folder is `%APPDATA%\FreeCAD\v1-1\Mod\` (check
-*Help → About → Copy to clipboard* for the user data path):
+FreeCAD 1.1 loads workbenches from `%APPDATA%\FreeCAD\v1-1\Mod\`. The
+easiest setup while the workbench is changing is a directory junction to
+this repository, so FreeCAD always runs the current code (run in `cmd`):
 
 ```bash
-git clone <this repo> "$APPDATA/FreeCAD/v1-1/Mod/freecad-rom-geometry"
+mklink /J "%APPDATA%\FreeCAD\v1-1\Mod\freecad-rom-geometry" "C:\Users\wille\Desktop\ROMwb"
 ```
 
-Then pick **ROM Geometry** in the workbench selector.
+A plain copy also works, but it is a snapshot that you have to replace after
+every update. Keep only one of them in `Mod`, because two copies register the
+same workbench. Restart FreeCAD and pick **ROM Geometry** in the workbench
+selector.
 
 ## Workflow in FreeCAD
 
@@ -47,31 +50,58 @@ Then pick **ROM Geometry** in the workbench selector.
    - `ExportPath`, `FuzzyTolerance`, `NearContactTolerance`, `IgnoredInterfaces`.
    - `RadialNodeRule`: `geometric_mean` by default.
 3. **Add Region.** Select one or more solids (in any open document, e.g. the
-   assembly's 3D view) and click Add Region. The task panel opens with the
-   sources' z-extent as defaults:
+   assembly's 3D view) and click Add Region. It is named `<part>_region`
+   (e.g. `aluminum_housing_region`, then `_region_2`, ...); strip the suffix
+   in Julia if you like. The task panel opens with the sources' z-extent as
+   defaults:
    - **Sources** are fused. Add the injector bulkhead, the disk and its
      screws to make one lump. *Add selected* / *Remove highlighted* edit
      the list.
-   - **Z min / Z max / R min / R max** take a value, or an expression that
-     overrides it, e.g. `table_hybrid#Spreadsheet.pre_combustion_chamber_length`
-     or `table_hybrid#Spreadsheet.aluminum_casing_length - 5 mm`.
+   - **Inverse** turns it into a fluid region: the *empty space* inside the
+     limits that the sources do not fill. Select the solids around the gas
+     (housing, liner, fuel grain, nozzle, injector), tick Inverse, and set the
+     z-limits. Without R max, the outer limit is the sources' largest radius,
+     so the outside world is not included. **Keep only the largest empty
+     space** (on by default) drops seal grooves and small gaps.
+   - **Z max / Z min / R max / R min** (max above min): each can be set three ways.
+     - Type a **value**.
+     - Press **`=`** in the box (or click its f(x) icon) for FreeCAD's
+       expression editor, with autocomplete. Type `table_hybrid#Spreadsheet.`
+       and it lists the aliases, e.g.
+       `table_hybrid#Spreadsheet.aluminum_casing_length - 5 mm`.
+     - **Pick a reference**: select an LCS in the assembly tree or 3D view
+       (e.g. `fuel_grain_bottom_lcs` under the assembly's `fuel_grain` link),
+       then click **Pick** on that row. The **Offset** box adds to it, and
+       accepts expressions too. The limit then follows the LCS when the CAD
+       changes. You can also pick a vertex, a planar face (gives z), a
+       coaxial cylindrical face (gives r, e.g. the liner's inner wall for
+       R max) or a coaxial circular edge. A reference wins over a value or
+       an expression; **✕** removes it.
+
+       Select the LCS *under the assembly's link*, not inside its own part
+       document. Only the link path places an Assembly4 LCS where it sits in
+       the assembly.
+
+       LCS references are stored by object name, so they survive any CAD
+       edit. Edges, faces and vertices are stored by name (`Edge12`). In
+       tests they followed moved geometry (e.g. a changed pad length), but if
+       an edit renumbers the elements so that the name now points at a
+       different *kind* of element, the region stops with "please re-pick
+       it" instead of using the wrong geometry. The check cannot tell two
+       circles apart, so prefer LCSs for limits you will edit a lot.
    - **Axial cells**: N equal slabs, numbered in increasing z.
-   - **Preview** recomputes and shows the cells in the region's colour.
-     **Cancel** reverts the edit. To remove a region you just added, use Undo.
+   - Changes apply as you type, and the region recomputes after a short
+     pause, so the 3D view shows the cells in the region's colour.
+     **Cancel** undoes everything done in the panel. To remove a region you
+     just added, use Undo.
    - Double-click a region in the tree to edit it again.
 4. **Order matters.** The order of regions inside the ROMModel group sets the
    cell numbering, and which side of an interface its face set holds.
-5. **Make Cavity Solid** (for fluid regions). Select the solids that bound the
-   cavity and click it. You get a `ROMCavity`: an axial cylinder around them,
-   minus them, which updates when the CAD changes. Set `Enclosure` to use
-   your own enclosing solid instead. `KeepOnlyLargestSolid` drops small
-   leftover voids (seal grooves).
-6. **Split Fastener Between Bodies.** Select the fastener, then body A, then
-   body B. You get two `ROMFastenerPart`s, cut on the bodies' contact plane;
-   add each to its body's region. Use `UseCustomPlane` when the bodies
-   don't touch. Keep cavities and fastener parts at the top level of the
-   document, not inside an `App::Part`.
-7. **Validate** shows every error and warning. **Export JSON** validates
+5. **Split Fastener Between Bodies.** Select the fastener, then body A, then
+   body B. You get two `ROMFastenerPart`s inside the ROM model, cut on the
+   bodies' contact plane; add each to its body's region. Use
+   `UseCustomPlane` when the bodies don't touch.
+6. **Validate** shows every error and warning. **Export JSON** validates
    first and refuses to write if there are errors.
 
 Headless export of a saved ROM document (linked documents open automatically):
@@ -79,6 +109,17 @@ Headless export of a saved ROM document (linked documents open automatically):
 ```bash
 python scripts/export_headless.py hybrid_rom.FCStd rom_geometry.json
 ```
+
+Override cell counts for one export, without changing the `.FCStd` (`*` = every
+region, applied first):
+
+```bash
+python scripts/export_headless.py hybrid_rom.FCStd rom_fine.json --cells "*=1" --cells fuel_grain=20 --cells fluid_domain=20
+```
+
+From Python (e.g. a mesh-convergence loop), the same is
+`export_rom_model(model_object, "out.json", n_axial_cells_overrides={"fuel_grain": 20})`
+from `rom_geometry.objects.rom_model`.
 
 ## Layout
 
@@ -100,7 +141,7 @@ rom_geometry/
   objects/              FeaturePython objects (no GUI imports; recompute headless)
     rom_model.py        ROMModel group; document → core spec; validate / export
     rom_region.py       ROMRegion
-    source_features.py  ROMCavity, ROMFastenerPart
+    source_features.py  ROMFastenerPart (and the old ROMCavity, kept for older documents)
   gui/                  view providers, commands, region task panel
   resources/icons/
   freecad_bootstrap.py  re-launch scripts under FreeCAD's bundled Python 3.11

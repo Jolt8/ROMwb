@@ -257,6 +257,20 @@ def shape_volume_and_centroid(shape):
     return total_volume, volume_moment * (1.0 / total_volume)
 
 
+def largest_radius_of_shape(shape, engine_axis):
+    """Largest distance from the axis reached by the shape. For solids of
+    revolution the outermost material is bounded by an edge (circle) or a
+    coaxial cylinder whose seam edge lies at that radius, so sampling the
+    edges finds it."""
+    largest_radius = 0.0
+    for edge in shape.Edges:
+        for edge_point in edge.discretize(64):
+            edge_point_radius = engine_axis.radial_distance(App.Vector(edge_point))
+            if edge_point_radius > largest_radius:
+                largest_radius = edge_point_radius
+    return largest_radius
+
+
 def total_bounding_box(shapes):
     bounding_box = App.BoundBox()
     for shape in shapes:

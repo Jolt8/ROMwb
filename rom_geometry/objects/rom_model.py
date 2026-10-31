@@ -95,8 +95,32 @@ def validate_rom_model(model_object):
     return build, report
 
 
-def export_rom_model(model_object, output_path=None):
+def apply_n_axial_cells_overrides(model_object, n_axial_cells_overrides):
+    """Set NAxialCells per region name ("*" = every region). The document is
+    changed in memory only; save it yourself if you want to keep the counts."""
+    regions_by_name = {}
+    for region_object in rom_regions_of_model(model_object):
+        regions_by_name[region_object.RegionName or region_object.Label] = region_object
+
+    for region_name, n_axial_cells in n_axial_cells_overrides.items():
+        if n_axial_cells < 1:
+            raise ValueError(f"n_axial_cells for '{region_name}' must be at least 1 (got {n_axial_cells})")
+        if region_name == "*":
+            target_regions = list(regions_by_name.values())
+        elif region_name in regions_by_name:
+            target_regions = [regions_by_name[region_name]]
+        else:
+            raise ValueError(f"no region named '{region_name}' (regions: {', '.join(regions_by_name)})")
+        for region_object in target_regions:
+            region_object.NAxialCells = n_axial_cells
+
+
+def export_rom_model(model_object, output_path=None, n_axial_cells_overrides=None):
     """Recompute, validate and write the JSON (to ExportPath by default).
+
+    n_axial_cells_overrides: optional {region_name: n} ("*" = all regions),
+    applied before the export (in memory, not saved). A "*" entry is applied
+    first, so {"*": 2, "fuel_grain": 10} works as expected.
     Raises ExportRefusedError when validation finds errors."""
     from rom_geometry.core.export_json import export_rom_geometry
 
@@ -104,6 +128,15 @@ def export_rom_model(model_object, output_path=None):
         output_path = model_object.ExportPath
     if not output_path:
         raise ValueError(f"ROMModel '{model_object.Label}' has no ExportPath")
+
+    if n_axial_cells_overrides:
+        ordered_overrides = {}
+        if "*" in n_axial_cells_overrides:
+            ordered_overrides["*"] = n_axial_cells_overrides["*"]
+        for region_name, n_axial_cells in n_axial_cells_overrides.items():
+            if region_name != "*":
+                ordered_overrides[region_name] = n_axial_cells
+        apply_n_axial_cells_overrides(model_object, ordered_overrides)
 
     model_object.Document.recompute()
     return export_rom_geometry(model_spec_from_rom_model(model_object), output_path)

@@ -32,7 +32,7 @@ from rom_geometry.core.boundary_patches import face_fingerprint, rematch_face
 from rom_geometry.core.distances import cylindrical_half_cell_distance
 from rom_geometry.core.export_json import ExportRefusedError, export_rom_geometry
 from rom_geometry.core.model_build import ROMModelSpec
-from rom_geometry.core.regions import RegionSpec
+from rom_geometry.core.regions import RegionSpec, build_region_geometry
 from rom_geometry.core.source_shapes import merge_source_shapes, split_shape_between_bodies
 
 
@@ -484,6 +484,49 @@ class MergeAndSplitTests(unittest.TestCase):
         overlap_volume = math.pi * (2.6 ** 2 - self.HOLE_RADIUS ** 2) * 5.0
         expected_volume = (plate_a.Volume + press_fit_screw.Volume - overlap_volume) * 1.0e-9
         self.assertLess(abs(export["cells"][0]["volume"] - expected_volume), 1.0e-9 * expected_volume)
+
+
+class InverseRegionTests(unittest.TestCase):
+    """Inverse (fluid) regions: the empty space the sources leave inside the limits."""
+
+    @classmethod
+    def setUpClass(cls):
+        # Liner r 18..20 inside housing r 20..24, both z 0..60 mm.
+        cls.liner = Part.makeCylinder(20.0, 60.0).cut(Part.makeCylinder(18.0, 60.0))
+        cls.housing = Part.makeCylinder(24.0, 60.0).cut(Part.makeCylinder(20.0, 60.0))
+
+    def inverse_region(self, r_max=0.0, keep_largest_piece=True):
+        return RegionSpec("fluid", "nitrous_oxide_gas", ["liner", "housing"], [self.liner, self.housing], 0.0, 60.0, r_max=r_max, n_axial_cells=3, invert=True, keep_largest_piece=keep_largest_piece)
+
+    def test_inverse_region_is_the_bore(self):
+        # Without RMax the outer limit is the sources' largest radius (24 mm),
+        # so the empty space is exactly the r < 18 mm bore.
+        build, report, export = export_rom_geometry(ROMModelSpec(regions=[self.inverse_region()], engine_axis=EngineAxis()))
+        self.assertEqual(report.errors, [])
+        bore_cell_volume = math.pi * 18.0 ** 2 * 20.0 * 1.0e-9
+        for exported_cell in export["cells"]:
+            self.assertLess(abs(exported_cell["volume"] - bore_cell_volume), 1.0e-9 * bore_cell_volume)
+        self.assertTrue(export["regions"][0]["inverted"])
+        self.assertFalse(any("source body" in warning for warning in report.warnings))
+
+    def test_small_outer_void_is_dropped_or_kept(self):
+        # RMax = 26 mm also takes in the r 24..26 mm ring outside the housing.
+        bore_volume = math.pi * 18.0 ** 2 * 60.0
+        outer_ring_volume = math.pi * (26.0 ** 2 - 24.0 ** 2) * 60.0
+
+        kept_largest = build_region_geometry(self.inverse_region(r_max=26.0), EngineAxis(), 0.01)
+        self.assertLess(abs(kept_largest.region_solid.Volume - bore_volume), 1.0e-9 * bore_volume)
+        self.assertTrue(any("dropped 1 smaller void" in warning for warning in kept_largest.warnings))
+
+        kept_all = build_region_geometry(self.inverse_region(r_max=26.0, keep_largest_piece=False), EngineAxis(), 0.01)
+        self.assertLess(abs(kept_all.region_solid.Volume - (bore_volume + outer_ring_volume)), 1.0e-9 * bore_volume)
+        self.assertTrue(any("disconnected" in warning for warning in kept_all.warnings))
+
+    def test_fully_filled_inverse_region_is_an_error(self):
+        solid_rod = Part.makeCylinder(24.0, 60.0)
+        filled_region = RegionSpec("nothing", "air", ["rod"], [solid_rod], 0.0, 60.0, invert=True)
+        region_geometry = build_region_geometry(filled_region, EngineAxis(), 0.01)
+        self.assertTrue(any("sources fill all" in error for error in region_geometry.errors))
 
 
 def write_expected_export():
