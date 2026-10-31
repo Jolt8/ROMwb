@@ -1,0 +1,1615 @@
+{
+ "format_version": 1,
+ "generator": {
+  "name": "ROMGeometry",
+  "version": "0.1.0",
+  "freecad_version": "1.1.4"
+ },
+ "source_document": "tests/rom_fixture.FCStd (built by tests/build_fixture.py)",
+ "exported_at": "2026-10-30T22:55:58-06:00",
+ "axis": {
+  "origin": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "direction": [
+   0.0,
+   0.0,
+   1.0
+  ]
+ },
+ "radial_node_rule": "geometric_mean",
+ "parameters": {
+  "housing_length": {
+   "value": 0.06,
+   "unit": "m"
+  },
+  "housing_outer_radius": {
+   "value": 0.024,
+   "unit": "m"
+  },
+  "housing_inner_radius": {
+   "value": 0.02,
+   "unit": "m"
+  },
+  "liner_inner_radius": {
+   "value": 0.018000000000000002,
+   "unit": "m"
+  },
+  "end_cap_thickness": {
+   "value": 0.005,
+   "unit": "m"
+  },
+  "nozzle_length": {
+   "value": 0.01,
+   "unit": "m"
+  },
+  "nozzle_gap": {
+   "value": 0.0002,
+   "unit": "m"
+  },
+  "nozzle_throat_radius": {
+   "value": 0.01,
+   "unit": "m"
+  },
+  "reference_half_angle": {
+   "value": 0.5235987755982988,
+   "unit": "rad"
+  },
+  "n_liner_cells": {
+   "value": 3,
+   "unit": ""
+  }
+ },
+ "regions": [
+  {
+   "name": "cavity",
+   "material": "nitrous_oxide_gas",
+   "source_shapes": [
+    "cavity"
+   ],
+   "z_min": 0.0,
+   "z_max": 0.06,
+   "r_min": null,
+   "r_max": null,
+   "n_axial_cells": 3,
+   "cell_ids": [
+    1,
+    2,
+    3
+   ],
+   "z_min_expression": "0 mm",
+   "z_max_expression": "fixture_parameters.housing_length"
+  },
+  {
+   "name": "liner",
+   "material": "phenolic",
+   "source_shapes": [
+    "liner"
+   ],
+   "z_min": 0.0,
+   "z_max": 0.06,
+   "r_min": null,
+   "r_max": null,
+   "n_axial_cells": 3,
+   "cell_ids": [
+    4,
+    5,
+    6
+   ],
+   "z_min_expression": "0 mm",
+   "z_max_expression": "fixture_parameters.housing_length"
+  },
+  {
+   "name": "housing",
+   "material": "aluminum_6061",
+   "source_shapes": [
+    "housing"
+   ],
+   "z_min": 0.0,
+   "z_max": 0.06,
+   "r_min": null,
+   "r_max": null,
+   "n_axial_cells": 2,
+   "cell_ids": [
+    7,
+    8
+   ],
+   "z_min_expression": "0 mm",
+   "z_max_expression": "fixture_parameters.housing_length"
+  },
+  {
+   "name": "end_cap_center",
+   "material": "aluminum_6061",
+   "source_shapes": [
+    "end_cap"
+   ],
+   "z_min": 0.06,
+   "z_max": 0.065,
+   "r_min": null,
+   "r_max": 0.018000000000000002,
+   "n_axial_cells": 1,
+   "cell_ids": [
+    9
+   ],
+   "z_min_expression": "fixture_parameters.housing_length",
+   "z_max_expression": "fixture_parameters.housing_length + fixture_parameters.end_cap_thickness"
+  },
+  {
+   "name": "end_cap_outer",
+   "material": "aluminum_6061",
+   "source_shapes": [
+    "end_cap"
+   ],
+   "z_min": 0.06,
+   "z_max": 0.065,
+   "r_min": 0.018000000000000002,
+   "r_max": null,
+   "n_axial_cells": 1,
+   "cell_ids": [
+    10
+   ],
+   "z_min_expression": "fixture_parameters.housing_length",
+   "z_max_expression": "fixture_parameters.housing_length + fixture_parameters.end_cap_thickness"
+  },
+  {
+   "name": "nozzle",
+   "material": "graphite",
+   "source_shapes": [
+    "nozzle"
+   ],
+   "z_min": -0.010199999999999999,
+   "z_max": -0.0002,
+   "r_min": null,
+   "r_max": null,
+   "n_axial_cells": 1,
+   "cell_ids": [
+    11
+   ],
+   "z_min_expression": "",
+   "z_max_expression": ""
+  }
+ ],
+ "cells": [
+  {
+   "id": 1,
+   "region": "cavity",
+   "axial_index": 1,
+   "volume": 2.0357520395261858e-05,
+   "centroid": [
+    0.0,
+    0.0,
+    0.01
+   ],
+   "z_min": 0.0,
+   "z_max": 0.02,
+   "r_inner": 0.0,
+   "r_outer": 0.018000000000000006,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "interface",
+     "neighbor_cell": 2,
+     "neighbor_local_idx": 1,
+     "area": 0.0010178760197630929,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.02
+     ],
+     "half_cell_distance": 0.01,
+     "neighbor_distance": 0.019999999999999997,
+     "centroid_distance": 0.019999999999999997,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 4,
+     "neighbor_local_idx": 1,
+     "area": 0.0022619467105846505,
+     "surface": "cylinder",
+     "radius": 0.018000000000000002,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.01
+     ],
+     "half_cell_distance": 0.012476649250079012,
+     "neighbor_distance": 0.01342489389099945,
+     "centroid_distance": 2.067502083093993e-17,
+     "distance_method": "cylindrical_log",
+     "notes": "solid cell (r_inner = 0): radial node taken as r_outer / 2"
+    },
+    {
+     "local_idx": 3,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": null,
+     "area": 0.0010178760197630929,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "half_cell_distance": 0.01,
+     "distance_method": "planar",
+     "notes": ""
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "region": "cavity",
+   "axial_index": 2,
+   "volume": 2.0357520395261858e-05,
+   "centroid": [
+    0.0,
+    0.0,
+    0.029999999999999995
+   ],
+   "z_min": 0.02,
+   "z_max": 0.04,
+   "r_inner": 0.0,
+   "r_outer": 0.018000000000000006,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "interface",
+     "neighbor_cell": 1,
+     "neighbor_local_idx": 1,
+     "area": 0.0010178760197630929,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.02
+     ],
+     "half_cell_distance": 0.009999999999999997,
+     "neighbor_distance": 0.019999999999999997,
+     "centroid_distance": 0.019999999999999997,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 3,
+     "neighbor_local_idx": 1,
+     "area": 0.0010178760197630929,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.04
+     ],
+     "half_cell_distance": 0.010000000000000004,
+     "neighbor_distance": 0.020000000000000004,
+     "centroid_distance": 0.020000000000000004,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 3,
+     "kind": "interface",
+     "neighbor_cell": 5,
+     "neighbor_local_idx": 1,
+     "area": 0.0022619467105846505,
+     "surface": "cylinder",
+     "radius": 0.018000000000000002,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.03
+     ],
+     "half_cell_distance": 0.012476649250079012,
+     "neighbor_distance": 0.01342489389099945,
+     "centroid_distance": 2.5096142214056237e-17,
+     "distance_method": "cylindrical_log",
+     "notes": "solid cell (r_inner = 0): radial node taken as r_outer / 2"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "region": "cavity",
+   "axial_index": 3,
+   "volume": 2.0357520395261858e-05,
+   "centroid": [
+    0.0,
+    0.0,
+    0.05
+   ],
+   "z_min": 0.04,
+   "z_max": 0.06,
+   "r_inner": 0.0,
+   "r_outer": 0.018000000000000006,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "interface",
+     "neighbor_cell": 2,
+     "neighbor_local_idx": 2,
+     "area": 0.0010178760197630929,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.04
+     ],
+     "half_cell_distance": 0.01,
+     "neighbor_distance": 0.020000000000000004,
+     "centroid_distance": 0.020000000000000004,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 6,
+     "neighbor_local_idx": 1,
+     "area": 0.0022619467105846505,
+     "surface": "cylinder",
+     "radius": 0.018000000000000002,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.05
+     ],
+     "half_cell_distance": 0.012476649250079012,
+     "neighbor_distance": 0.01342489389099945,
+     "centroid_distance": 2.1861920873837796e-17,
+     "distance_method": "cylindrical_log",
+     "notes": "solid cell (r_inner = 0): radial node taken as r_outer / 2"
+    },
+    {
+     "local_idx": 3,
+     "kind": "interface",
+     "neighbor_cell": 9,
+     "neighbor_local_idx": 1,
+     "area": 0.0010178760197630929,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.06
+     ],
+     "half_cell_distance": 0.01,
+     "neighbor_distance": 0.0125,
+     "centroid_distance": 0.0125,
+     "distance_method": "planar",
+     "notes": ""
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "region": "liner",
+   "axial_index": 1,
+   "volume": 4.775220833456479e-06,
+   "centroid": [
+    0.0,
+    0.0,
+    0.01
+   ],
+   "z_min": 0.0,
+   "z_max": 0.02,
+   "r_inner": 0.018000000000000002,
+   "r_outer": 0.020000000000000004,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "interface",
+     "neighbor_cell": 1,
+     "neighbor_local_idx": 2,
+     "area": 0.0022619467105846505,
+     "surface": "cylinder",
+     "radius": 0.018000000000000002,
+     "outward": "-r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.01
+     ],
+     "half_cell_distance": 0.0009482446409204373,
+     "neighbor_distance": 0.01342489389099945,
+     "centroid_distance": 2.067502083093993e-17,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 5,
+     "neighbor_local_idx": 2,
+     "area": 0.00023876104167282436,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.02
+     ],
+     "half_cell_distance": 0.01,
+     "neighbor_distance": 0.019999999999999983,
+     "centroid_distance": 0.019999999999999983,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 3,
+     "kind": "interface",
+     "neighbor_cell": 7,
+     "neighbor_local_idx": 1,
+     "area": 0.0025132741228718345,
+     "surface": "cylinder",
+     "radius": 0.02,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.01
+     ],
+     "half_cell_distance": 0.0010536051565782642,
+     "neighbor_distance": 0.00287682072451781,
+     "centroid_distance": 0.005,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 4,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": null,
+     "area": 0.00023876104167282436,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "half_cell_distance": 0.01,
+     "distance_method": "planar",
+     "notes": ""
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "region": "liner",
+   "axial_index": 2,
+   "volume": 4.775220833456479e-06,
+   "centroid": [
+    0.0,
+    0.0,
+    0.02999999999999998
+   ],
+   "z_min": 0.02,
+   "z_max": 0.04,
+   "r_inner": 0.018000000000000002,
+   "r_outer": 0.020000000000000004,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "interface",
+     "neighbor_cell": 2,
+     "neighbor_local_idx": 3,
+     "area": 0.0022619467105846505,
+     "surface": "cylinder",
+     "radius": 0.018000000000000002,
+     "outward": "-r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.03
+     ],
+     "half_cell_distance": 0.0009482446409204373,
+     "neighbor_distance": 0.01342489389099945,
+     "centroid_distance": 2.5096142214056237e-17,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 4,
+     "neighbor_local_idx": 2,
+     "area": 0.00023876104167282436,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.02
+     ],
+     "half_cell_distance": 0.009999999999999983,
+     "neighbor_distance": 0.019999999999999983,
+     "centroid_distance": 0.019999999999999983,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 3,
+     "kind": "interface",
+     "neighbor_cell": 6,
+     "neighbor_local_idx": 2,
+     "area": 0.00023876104167282436,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.04
+     ],
+     "half_cell_distance": 0.010000000000000018,
+     "neighbor_distance": 0.020000000000000025,
+     "centroid_distance": 0.020000000000000025,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 4,
+     "kind": "interface",
+     "neighbor_cell": 7,
+     "neighbor_local_idx": 2,
+     "area": 0.0012566370614359172,
+     "surface": "cylinder",
+     "radius": 0.02,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.025
+     ],
+     "half_cell_distance": 0.0010536051565782642,
+     "neighbor_distance": 0.00287682072451781,
+     "centroid_distance": 0.014999999999999982,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 5,
+     "kind": "interface",
+     "neighbor_cell": 8,
+     "neighbor_local_idx": 1,
+     "area": 0.0012566370614359172,
+     "surface": "cylinder",
+     "radius": 0.02,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.035
+     ],
+     "half_cell_distance": 0.0010536051565782642,
+     "neighbor_distance": 0.00287682072451781,
+     "centroid_distance": 0.015000000000000046,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "region": "liner",
+   "axial_index": 3,
+   "volume": 4.775220833456479e-06,
+   "centroid": [
+    0.0,
+    0.0,
+    0.05000000000000001
+   ],
+   "z_min": 0.04,
+   "z_max": 0.06,
+   "r_inner": 0.018000000000000002,
+   "r_outer": 0.020000000000000004,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "interface",
+     "neighbor_cell": 3,
+     "neighbor_local_idx": 2,
+     "area": 0.0022619467105846505,
+     "surface": "cylinder",
+     "radius": 0.018000000000000002,
+     "outward": "-r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.05
+     ],
+     "half_cell_distance": 0.0009482446409204373,
+     "neighbor_distance": 0.01342489389099945,
+     "centroid_distance": 2.1861920873837796e-17,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 5,
+     "neighbor_local_idx": 3,
+     "area": 0.00023876104167282436,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.04
+     ],
+     "half_cell_distance": 0.010000000000000007,
+     "neighbor_distance": 0.020000000000000025,
+     "centroid_distance": 0.020000000000000025,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 3,
+     "kind": "interface",
+     "neighbor_cell": 8,
+     "neighbor_local_idx": 2,
+     "area": 0.0025132741228718345,
+     "surface": "cylinder",
+     "radius": 0.02,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.05
+     ],
+     "half_cell_distance": 0.0010536051565782642,
+     "neighbor_distance": 0.00287682072451781,
+     "centroid_distance": 0.004999999999999978,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 4,
+     "kind": "interface",
+     "neighbor_cell": 10,
+     "neighbor_local_idx": 1,
+     "area": 0.00023876104167282436,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.06
+     ],
+     "half_cell_distance": 0.009999999999999993,
+     "neighbor_distance": 0.012499999999999978,
+     "centroid_distance": 0.012499999999999978,
+     "distance_method": "planar",
+     "notes": ""
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "region": "housing",
+   "axial_index": 1,
+   "volume": 1.658760921095411e-05,
+   "centroid": [
+    0.0,
+    0.0,
+    0.015
+   ],
+   "z_min": 0.0,
+   "z_max": 0.03,
+   "r_inner": 0.02,
+   "r_outer": 0.024000000000000004,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "interface",
+     "neighbor_cell": 4,
+     "neighbor_local_idx": 3,
+     "area": 0.0025132741228718345,
+     "surface": "cylinder",
+     "radius": 0.02,
+     "outward": "-r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.01
+     ],
+     "half_cell_distance": 0.0018232155679395454,
+     "neighbor_distance": 0.00287682072451781,
+     "centroid_distance": 0.005,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 5,
+     "neighbor_local_idx": 4,
+     "area": 0.0012566370614359172,
+     "surface": "cylinder",
+     "radius": 0.02,
+     "outward": "-r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.025
+     ],
+     "half_cell_distance": 0.0018232155679395454,
+     "neighbor_distance": 0.00287682072451781,
+     "centroid_distance": 0.014999999999999982,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 3,
+     "kind": "interface",
+     "neighbor_cell": 8,
+     "neighbor_local_idx": 3,
+     "area": 0.000552920307031804,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.03
+     ],
+     "half_cell_distance": 0.015,
+     "neighbor_distance": 0.03000000000000003,
+     "centroid_distance": 0.03000000000000003,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 4,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": "housing_ambient",
+     "area": 0.004523893421169302,
+     "surface": "cylinder",
+     "radius": 0.024,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.015000000000000003
+     ],
+     "half_cell_distance": 0.002187858681527454,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 5,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": null,
+     "area": 0.000552920307031804,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "half_cell_distance": 0.015,
+     "distance_method": "planar",
+     "notes": ""
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "region": "housing",
+   "axial_index": 2,
+   "volume": 1.658760921095411e-05,
+   "centroid": [
+    0.0,
+    0.0,
+    0.045000000000000026
+   ],
+   "z_min": 0.03,
+   "z_max": 0.06,
+   "r_inner": 0.02,
+   "r_outer": 0.024000000000000004,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "interface",
+     "neighbor_cell": 5,
+     "neighbor_local_idx": 5,
+     "area": 0.0012566370614359172,
+     "surface": "cylinder",
+     "radius": 0.02,
+     "outward": "-r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.035
+     ],
+     "half_cell_distance": 0.0018232155679395454,
+     "neighbor_distance": 0.00287682072451781,
+     "centroid_distance": 0.015000000000000046,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 6,
+     "neighbor_local_idx": 3,
+     "area": 0.0025132741228718345,
+     "surface": "cylinder",
+     "radius": 0.02,
+     "outward": "-r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.05
+     ],
+     "half_cell_distance": 0.0018232155679395454,
+     "neighbor_distance": 0.00287682072451781,
+     "centroid_distance": 0.004999999999999978,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 3,
+     "kind": "interface",
+     "neighbor_cell": 7,
+     "neighbor_local_idx": 3,
+     "area": 0.000552920307031804,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.03
+     ],
+     "half_cell_distance": 0.015000000000000029,
+     "neighbor_distance": 0.03000000000000003,
+     "centroid_distance": 0.03000000000000003,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 4,
+     "kind": "interface",
+     "neighbor_cell": 10,
+     "neighbor_local_idx": 2,
+     "area": 0.000552920307031804,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.06
+     ],
+     "half_cell_distance": 0.014999999999999972,
+     "neighbor_distance": 0.017499999999999957,
+     "centroid_distance": 0.017499999999999957,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 5,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": "housing_ambient",
+     "area": 0.004523893421169302,
+     "surface": "cylinder",
+     "radius": 0.024,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.045
+     ],
+     "half_cell_distance": 0.002187858681527454,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "region": "end_cap_center",
+   "axial_index": 1,
+   "volume": 5.089380098815464e-06,
+   "centroid": [
+    0.0,
+    0.0,
+    0.0625
+   ],
+   "z_min": 0.06,
+   "z_max": 0.065,
+   "r_inner": 0.0,
+   "r_outer": 0.018000000000000006,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "interface",
+     "neighbor_cell": 3,
+     "neighbor_local_idx": 3,
+     "area": 0.0010178760197630929,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.06
+     ],
+     "half_cell_distance": 0.0025,
+     "neighbor_distance": 0.0125,
+     "centroid_distance": 0.0125,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 10,
+     "neighbor_local_idx": 3,
+     "area": 0.0005654866776461626,
+     "surface": "cylinder",
+     "radius": 0.018000000000000002,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.0625
+     ],
+     "half_cell_distance": 0.012476649250079012,
+     "neighbor_distance": 0.015065787902145042,
+     "centroid_distance": 1.48611439837113e-17,
+     "distance_method": "cylindrical_log",
+     "notes": "solid cell (r_inner = 0): radial node taken as r_outer / 2"
+    },
+    {
+     "local_idx": 3,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": "end_cap_top",
+     "area": 0.0010178760197630929,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.065
+     ],
+     "half_cell_distance": 0.0025,
+     "distance_method": "planar",
+     "notes": ""
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "region": "end_cap_outer",
+   "axial_index": 1,
+   "volume": 3.95840674352314e-06,
+   "centroid": [
+    0.0,
+    0.0,
+    0.062499999999999986
+   ],
+   "z_min": 0.06,
+   "z_max": 0.065,
+   "r_inner": 0.018000000000000002,
+   "r_outer": 0.024000000000000004,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "interface",
+     "neighbor_cell": 6,
+     "neighbor_local_idx": 4,
+     "area": 0.00023876104167282436,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.06
+     ],
+     "half_cell_distance": 0.0024999999999999857,
+     "neighbor_distance": 0.012499999999999978,
+     "centroid_distance": 0.012499999999999978,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 2,
+     "kind": "interface",
+     "neighbor_cell": 8,
+     "neighbor_local_idx": 4,
+     "area": 0.000552920307031804,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.06
+     ],
+     "half_cell_distance": 0.0024999999999999857,
+     "neighbor_distance": 0.017499999999999957,
+     "centroid_distance": 0.017499999999999957,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 3,
+     "kind": "interface",
+     "neighbor_cell": 9,
+     "neighbor_local_idx": 2,
+     "area": 0.0005654866776461626,
+     "surface": "cylinder",
+     "radius": 0.018000000000000002,
+     "outward": "-r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.0625
+     ],
+     "half_cell_distance": 0.00258913865206603,
+     "neighbor_distance": 0.015065787902145042,
+     "centroid_distance": 1.48611439837113e-17,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 4,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": "end_cap_top",
+     "area": 0.0007916813487046283,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      0.065
+     ],
+     "half_cell_distance": 0.0025000000000000144,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 5,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": null,
+     "area": 0.0007539822368615503,
+     "surface": "cylinder",
+     "radius": 0.024,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      0.0625
+     ],
+     "half_cell_distance": 0.0034521848694213696,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "region": "nozzle",
+   "axial_index": 1,
+   "volume": 1.1770500475449758e-05,
+   "centroid": [
+    0.0,
+    0.0,
+    -0.005698220640569395
+   ],
+   "z_min": -0.010199999999999999,
+   "z_max": -0.0002,
+   "r_inner": 0.01,
+   "r_outer": 0.024000000000000004,
+   "faces": [
+    {
+     "local_idx": 1,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": "nozzle_bore",
+     "area": 0.00112649645160314,
+     "surface": "cone",
+     "radius": null,
+     "outward": null,
+     "normal": null,
+     "meridional_normal": [
+      -0.7808688094430303,
+      0.6246950475544244
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      -0.004723809523809523
+     ],
+     "half_cell_distance": 0.0014762402127333455,
+     "distance_method": "approximate",
+     "notes": "approximate: meridional normal distance from the cell node (r_c, z_centroid) to a point on the face"
+    },
+    {
+     "local_idx": 2,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": null,
+     "area": 0.001495398103108742,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      -1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      -0.010199999999999999
+     ],
+     "half_cell_distance": 0.004501779359430604,
+     "distance_method": "planar",
+     "notes": ""
+    },
+    {
+     "local_idx": 3,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": null,
+     "area": 0.0015079644737231006,
+     "surface": "cylinder",
+     "radius": 0.024,
+     "outward": "+r",
+     "normal": null,
+     "centroid": [
+      0.0,
+      0.0,
+      -0.0052
+     ],
+     "half_cell_distance": 0.0105056248482468,
+     "distance_method": "cylindrical_log",
+     "notes": ""
+    },
+    {
+     "local_idx": 4,
+     "kind": "boundary",
+     "neighbor_cell": 0,
+     "neighbor_local_idx": 0,
+     "patch": null,
+     "area": 0.0007916813487046283,
+     "surface": "plane",
+     "radius": null,
+     "outward": null,
+     "normal": [
+      0.0,
+      0.0,
+      1.0
+     ],
+     "centroid": [
+      0.0,
+      0.0,
+      -0.0001999999999999993
+     ],
+     "half_cell_distance": 0.005498220640569396,
+     "distance_method": "planar",
+     "notes": ""
+    }
+   ]
+  }
+ ],
+ "cellsets": {
+  "cavity": [
+   1,
+   2,
+   3
+  ],
+  "liner": [
+   4,
+   5,
+   6
+  ],
+  "housing": [
+   7,
+   8
+  ],
+  "end_cap_center": [
+   9
+  ],
+  "end_cap_outer": [
+   10
+  ],
+  "nozzle": [
+   11
+  ]
+ },
+ "facetsets": {
+  "cavity__cavity": [
+   [
+    1,
+    1
+   ],
+   [
+    2,
+    2
+   ]
+  ],
+  "cavity__liner": [
+   [
+    1,
+    2
+   ],
+   [
+    2,
+    3
+   ],
+   [
+    3,
+    2
+   ]
+  ],
+  "cavity__end_cap_center": [
+   [
+    3,
+    3
+   ]
+  ],
+  "liner__liner": [
+   [
+    4,
+    2
+   ],
+   [
+    5,
+    3
+   ]
+  ],
+  "liner__housing": [
+   [
+    4,
+    3
+   ],
+   [
+    5,
+    4
+   ],
+   [
+    5,
+    5
+   ],
+   [
+    6,
+    3
+   ]
+  ],
+  "liner__end_cap_outer": [
+   [
+    6,
+    4
+   ]
+  ],
+  "housing__housing": [
+   [
+    7,
+    3
+   ]
+  ],
+  "housing_ambient": [
+   [
+    7,
+    4
+   ],
+   [
+    8,
+    5
+   ]
+  ],
+  "housing__end_cap_outer": [
+   [
+    8,
+    4
+   ]
+  ],
+  "end_cap_center__end_cap_outer": [
+   [
+    9,
+    2
+   ]
+  ],
+  "end_cap_top": [
+   [
+    9,
+    3
+   ],
+   [
+    10,
+    4
+   ]
+  ],
+  "nozzle_bore": [
+   [
+    11,
+    1
+   ]
+  ]
+ },
+ "unassigned_boundary_faces": [
+  {
+   "cell": 1,
+   "local_idx": 3,
+   "area": 0.0010178760197630929,
+   "centroid": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "cell": 4,
+   "local_idx": 4,
+   "area": 0.00023876104167282436,
+   "centroid": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "cell": 7,
+   "local_idx": 5,
+   "area": 0.000552920307031804,
+   "centroid": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "cell": 10,
+   "local_idx": 5,
+   "area": 0.0007539822368615503,
+   "centroid": [
+    0.0,
+    0.0,
+    0.0625
+   ]
+  },
+  {
+   "cell": 11,
+   "local_idx": 2,
+   "area": 0.001495398103108742,
+   "centroid": [
+    0.0,
+    0.0,
+    -0.010199999999999999
+   ]
+  },
+  {
+   "cell": 11,
+   "local_idx": 3,
+   "area": 0.0015079644737231006,
+   "centroid": [
+    0.0,
+    0.0,
+    -0.0052
+   ]
+  },
+  {
+   "cell": 11,
+   "local_idx": 4,
+   "area": 0.0007916813487046283,
+   "centroid": [
+    0.0,
+    0.0,
+    -0.0001999999999999993
+   ]
+  }
+ ],
+ "near_contacts": [
+  {
+   "region_a": "cavity",
+   "region_b": "nozzle",
+   "cell_a": 1,
+   "cell_b": 11,
+   "gap": 0.000199999999999999
+  },
+  {
+   "region_a": "liner",
+   "region_b": "nozzle",
+   "cell_a": 4,
+   "cell_b": 11,
+   "gap": 0.000199999999999999
+  },
+  {
+   "region_a": "housing",
+   "region_b": "nozzle",
+   "cell_a": 7,
+   "cell_b": 11,
+   "gap": 0.0001999999999999993
+  }
+ ],
+ "validation": {
+  "errors": [],
+  "warnings": [
+   "near-contact: cells 1 (cavity) and 11 (nozzle) are 0.2 mm apart but share no face",
+   "near-contact: cells 4 (liner) and 11 (nozzle) are 0.2 mm apart but share no face",
+   "near-contact: cells 7 (housing) and 11 (nozzle) are 0.2 mm apart but share no face",
+   "region 'cavity': 0.00101788 m^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'liner': 0.000238761 m^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'housing': 0.00055292 m^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'end_cap_outer': 0.000753982 m^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'nozzle': 0.00379504 m^2 of boundary has no patch (adiabatic unless you add one)",
+   "cell 11 (nozzle) face 1: cone face, half-cell distance is approximate"
+  ]
+ }
+}
