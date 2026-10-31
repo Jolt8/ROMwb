@@ -17,7 +17,27 @@ boundary faces, the gaps and the overlaps, and computes the distances.
 | 1 | headless geometry core, fixture, tests; merge parts / split fasteners | **done** |
 | 2 | the workbench: toolbar, `ROMModel` / `ROMRegion` objects (incl. inverse / fluid regions, LCS and face references), region task panel, coloured preview, Split Fastener, Validate / Export (text report), `scripts/export_headless.py` | **done** |
 | 3 | boundary patches (face picking, fingerprint re-matching, re-pick), interface review panel with ignore toggles and 3D highlighting | **done** |
-| 4 | Julia loader in FVMFramework | not started |
+| 4 | Julia loader in FVMFramework (`src/geometry/rom_geometry_loading.jl`) | **done** |
+
+## Loading the export in FVMFramework
+
+```julia
+using FVMFramework, ComponentArrays, Unitful
+
+rom_data = read_rom_geometry_json("rom_geometry.json")
+add_virtual_cell!(rom_data; name = "recirculation_zone", volume = 2.0e-6,
+    faces = [(neighbor_region = "fluid_domain", neighbor_axial_index = :last, area = 1.0e-4, half_cell_distance = 1.0e-3, neighbor_half_cell_distance = 2.0e-3)])
+
+n_cells = rom_cell_count(rom_data)  # after adding virtual cells
+config = create_fvm_config_from_rom(rom_data, ComponentVector(temp = zeros(n_cells)u"K"))
+# then add_setup_syms!, add_region!(config, "fuel_grain"; ...), add_patch!(config, "ambient_heat_exchange_vertical"; ...),
+# add_patch!(config, "fuel_grain__fluid_domain"; ...) and finish_fvm_config as for a mesh.
+```
+
+`config.geo.cellsets[region]` and `config.geo.facetsets[name]` hold the sets, and
+`get_facetset(geo, region_a, region_b)` gives the faces between two regions from
+`region_a`'s side. `heat_diffusion_series_resistance!` uses both half-cell
+distances, so a thin liner against a thick wall is conducted correctly.
 
 ## Install
 

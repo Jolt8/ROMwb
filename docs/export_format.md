@@ -1,7 +1,9 @@
 # ROM geometry export format (format_version 1)
 
 This repository owns this format. FVMFramework's loader
-(`src/geometry/rom_geometry_loading.jl`, phase 4) reads it.
+(`src/geometry/rom_geometry_loading.jl`) reads it into an `FVMGeometry`.
+Its tests keep a copy of `tests/expected/fixture_export.json`
+(`FVMFramework/test/rom_geometry/data/`); refresh that copy when the format changes.
 
 A reduced-order model is a very coarse unstructured mesh with oddly shaped
 cells. The file therefore describes cells, half-faces, neighbours, areas,
