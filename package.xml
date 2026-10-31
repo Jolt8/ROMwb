@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<package format="1" xmlns="https://wiki.freecad.org/Package_Metadata">
+  <name>ROMGeometry</name>
+  <description>Define lumped regions on CAD solids and export cells, interfaces and conduction distances as JSON for the FVMFramework reduced-order models.</description>
+  <version>0.1.0</version>
+  <date>2026-10-30</date>
+  <maintainer email="will.martinjoltik888@gmail.com">Will Martin</maintainer>
+  <license>UNSPECIFIED</license>
+  <icon>rom_geometry/resources/icons/rom_geometry_workbench.svg</icon>
+  <content>
+    <workbench>
+      <name>ROMGeometry</name>
+      <classname>ROMGeometryWorkbench</classname>
+      <subdirectory>./</subdirectory>
+      <freecadmin>1.1.0</freecadmin>
+      <icon>rom_geometry/resources/icons/rom_geometry_workbench.svg</icon>
+    </workbench>
+  </content>
+</package>

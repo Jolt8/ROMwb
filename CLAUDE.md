@@ -33,7 +33,9 @@ solid_fuel_specific_energy =
 
 # Repository rules
 
-- `rom_geometry/core/` must never import `FreeCADGui`. It must run headless.
+- `rom_geometry/core/` and `rom_geometry/objects/` must never import `FreeCADGui`. They must run headless.
+- Axial positions (ZMin/ZMax) are `App::PropertyDistance`, not `App::PropertyLength`, because `PropertyLength` silently clamps negative values to 0.
+- `generalFuse` returns empty map entries for Compound arguments (and `cut()` returns compounds). Always pass `.Solids` individually.
 - Core lengths are FreeCAD mm. Only `core/export_json.py` converts to SI.
 - The export format is specified in `docs/export_format.md`. Change the doc whenever you change the format.
 - Tests run under FreeCAD's bundled Python: `python tests/test_core.py` re-launches itself under `C:\Program Files\FreeCAD 1.1\bin\python.exe` (override with `FREECAD_BIN`).
