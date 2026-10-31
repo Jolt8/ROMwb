@@ -12,6 +12,7 @@ physics functions are written per face.
 from dataclasses import dataclass, field
 
 import FreeCAD as App
+import Part
 
 from rom_geometry.core.axis_geometry import centroid_sample_on_face, describe_face_surface, outward_face_samples
 
@@ -78,8 +79,12 @@ class CellRecord:
 def split_cells_into_sub_faces(cells, fuzzy_tolerance, engine_axis):
     """Run one generalFuse over all cell solids and record who owns each sub-face.
 
-    Returns (sub_faces, cell_sub_face_ids, errors), where cell_sub_face_ids[i]
-    lists the sub-face ids on the boundary of cells[i].
+    Returns (sub_faces, cell_sub_face_ids, overlaps, errors), where
+    cell_sub_face_ids[i] lists the sub-face ids on the boundary of cells[i].
+
+    Overlaps come for free: where two cells overlap, generalFuse cuts the
+    shared volume out as one piece that belongs to BOTH cells. Its volume is
+    the overlap volume, so no pairwise common() is needed.
     """
     errors = []
 
@@ -150,7 +155,37 @@ def split_cells_into_sub_faces(cells, fuzzy_tolerance, engine_axis):
             owner_list = ", ".join(str(cell_id) for cell_id in sub_face.owner_cell_ids)
             errors.append(f"a face of area {sub_face.face.Area:.6g} mm^2 is shared by more than two cells ({owner_list}); the cells must overlap")
 
-    return sub_faces, cell_sub_face_ids, errors
+    # Pieces that belong to more than one cell are overlap volumes.
+    piece_owners_by_hash = {}
+    for cell_index, cell_pieces in enumerate(pieces_per_cell):
+        for piece in cell_pieces:
+            same_hash_entries = piece_owners_by_hash.setdefault(hash(piece), [])
+            for known_piece, owner_indices in same_hash_entries:
+                if known_piece.isSame(piece):
+                    owner_indices.append(cell_index)
+                    break
+            else:
+                same_hash_entries.append((piece, [cell_index]))
+
+    overlap_volume_by_pair = {}
+    for same_hash_entries in piece_owners_by_hash.values():
+        for piece, owner_indices in same_hash_entries:
+            for first_position in range(len(owner_indices)):
+                for second_position in range(first_position + 1, len(owner_indices)):
+                    cell_pair = (owner_indices[first_position], owner_indices[second_position])
+                    overlap_volume_by_pair[cell_pair] = overlap_volume_by_pair.get(cell_pair, 0.0) + piece.Volume
+
+    overlaps = []
+    for (index_a, index_b), overlap_volume in overlap_volume_by_pair.items():
+        cell_a = cells[index_a]
+        cell_b = cells[index_b]
+        if cell_a.region_name == cell_b.region_name:
+            continue
+        smaller_cell_volume = min(cell_a.volume, cell_b.volume)
+        if overlap_volume > 1.0e-6 * smaller_cell_volume:
+            overlaps.append({"cell_a": cell_a.cell_id, "cell_b": cell_b.cell_id, "region_a": cell_a.region_name, "region_b": cell_b.region_name, "overlap_volume": overlap_volume, "smaller_cell_volume": smaller_cell_volume})
+
+    return sub_faces, cell_sub_face_ids, overlaps, errors
 
 
 def _sub_faces_can_merge(face_a, face_b, length_tolerance):
@@ -170,7 +205,7 @@ def _sub_faces_can_merge(face_a, face_b, length_tolerance):
     return False
 
 
-def build_cell_faces(cells, sub_faces, cell_sub_face_ids, patch_of_sub_face, ignored_region_pairs, engine_axis, length_tolerance):
+def build_cell_faces(cells, sub_faces, cell_sub_face_ids, patch_of_sub_face, ignored_region_pairs, engine_axis, length_tolerance, progress_callback=None):
     """Turn each cell's sub-faces into its exported faces.
 
     Fills cell.faces (with local_idx) for every cell and returns
@@ -181,6 +216,8 @@ def build_cell_faces(cells, sub_faces, cell_sub_face_ids, patch_of_sub_face, ign
     refused_merge_messages = []
 
     for cell_index, cell in enumerate(cells):
+        if progress_callback is not None:
+            progress_callback(cell_index / len(cells))
         single_sub_face_records = []
 
         # 1. Describe every sub-face from this cell's point of view.
@@ -206,8 +243,9 @@ def build_cell_faces(cells, sub_faces, cell_sub_face_ids, patch_of_sub_face, ign
                     kind = "interface"
                     ignored_neighbor_cell_id = 0
 
-            representative_point, outward_normal, tessellated_area_vector = outward_face_samples(sub_face.face, cell.solid)
             surface = sub_face.surface
+            has_closed_form_area_vector = surface["surface_type"] == "plane" or (surface["surface_type"] == "cylinder" and surface["full_revolution"])
+            representative_point, outward_normal, tessellated_area_vector = outward_face_samples(sub_face.face, cell.solid, need_area_vector=not has_closed_form_area_vector)
 
             has_exact_distance_rule = surface["surface_type"] == "plane" or (surface["surface_type"] == "cylinder" and surface["is_coaxial"])
             if not has_exact_distance_rule:
@@ -280,31 +318,46 @@ def build_cell_faces(cells, sub_faces, cell_sub_face_ids, patch_of_sub_face, ign
             if not merged_into_existing:
                 merged_faces.append(sub_face_record)
 
-        # 3. Report refused merges: faces to the same neighbour (or patch)
-        #    kept separate because they are different surfaces. Unassigned
-        #    boundary faces are not "per neighbour", so they are not reported.
+        # 3. Note where a cell meets one neighbour (or one patch) on several
+        #    different surfaces, e.g. a retainer seated in a step (a flat
+        #    shoulder plus a cylindrical wall) or a wall whose radius steps
+        #    inside one cell. Those stay separate faces, each with its own
+        #    normal and conduction distance; that is correct, not a problem.
+        #    Unassigned boundary faces are not "per neighbour", so they are
+        #    not reported.
+        faces_by_destination = {}
         for merged_face in merged_faces:
             is_unassigned_boundary = merged_face.kind == "boundary" and merged_face.patch is None
             if is_unassigned_boundary:
                 continue
+            destination_key = (merged_face.kind, merged_face.neighbor_cell, merged_face.ignored_neighbor_cell, merged_face.patch)
+            faces_by_destination.setdefault(destination_key, []).append(merged_face)
 
-            siblings = []
-            for other_face in merged_faces:
-                if other_face is merged_face:
-                    continue
-                same_destination = other_face.kind == merged_face.kind and other_face.neighbor_cell == merged_face.neighbor_cell and other_face.ignored_neighbor_cell == merged_face.ignored_neighbor_cell and other_face.patch == merged_face.patch
-                if same_destination:
-                    siblings.append(other_face)
+        for (face_kind, neighbor_cell_id, ignored_neighbor_cell_id, patch_name), destination_faces in faces_by_destination.items():
+            if len(destination_faces) < 2:
+                continue
 
-            if len(siblings) > 0:
-                sibling_types = ", ".join(sibling.surface_type for sibling in siblings)
-                if merged_face.kind == "boundary":
-                    destination_text = f"patch '{merged_face.patch}'"
+            surface_descriptions = []
+            for destination_face in destination_faces:
+                if destination_face.surface_type == "cylinder" and destination_face.radius is not None:
+                    surface_descriptions.append(f"cylinder r = {destination_face.radius:.4g} mm")
                 else:
-                    destination_text = f"cell {merged_face.neighbor_cell or merged_face.ignored_neighbor_cell}"
-                note = f"kept separate from {len(siblings)} other face(s) to {destination_text} ({sibling_types}) because merging a {merged_face.surface_type} with a different surface would leave no single normal or half-cell distance"
-                merged_face.notes.append(note)
-                refused_merge_messages.append(f"cell {cell.cell_id} ({cell.region_name}): {merged_face.surface_type} face {note}")
+                    surface_descriptions.append(destination_face.surface_type)
+            surfaces_text = ", ".join(surface_descriptions)
+
+            if face_kind == "boundary":
+                destination_text = f"patch '{patch_name}'"
+                is_reported_here = True
+            else:
+                other_cell_id = neighbor_cell_id or ignored_neighbor_cell_id
+                destination_text = f"cell {other_cell_id} ({cell_by_id[other_cell_id].region_name})"
+                is_reported_here = cell.cell_id < other_cell_id  # report each cell pair once
+
+            for destination_face in destination_faces:
+                destination_face.notes.append(f"one of {len(destination_faces)} faces to {destination_text} ({surfaces_text}), kept separate so each has its own normal and conduction distance")
+
+            if is_reported_here:
+                refused_merge_messages.append(f"cell {cell.cell_id} ({cell.region_name}) meets {destination_text} on {len(destination_faces)} different surfaces ({surfaces_text}); they stay separate faces, each with its own normal and conduction distance. This is normal for stepped contacts.")
 
         # 4. Deterministic local face order: interfaces by neighbour, then
         #    patch faces, then ignored interfaces, then unassigned faces;
@@ -358,24 +411,34 @@ def connect_interface_half_faces(cells):
     return errors
 
 
-def find_cell_overlaps(cells):
-    """Volume shared by cells of different regions. Must be ~0; non-zero means
-    interfering CAD (threads, press fits) and is an error in validation."""
-    overlaps = []
-    for index_a in range(len(cells)):
-        for index_b in range(index_a + 1, len(cells)):
-            cell_a = cells[index_a]
-            cell_b = cells[index_b]
-            if cell_a.region_name == cell_b.region_name:
-                continue
-            if not cell_a.solid.BoundBox.intersect(cell_b.solid.BoundBox):
-                continue
+def faces_lie_on_same_surface(face_a, face_b, length_tolerance):
+    """Can these two faces touch over an area? Only if they lie on the same
+    plane, or the same cylinder. Anything else (cones, B-splines) is
+    answered "maybe", so the caller checks it with a boolean."""
+    surface_a = face_a.Surface
+    surface_b = face_b.Surface
 
-            overlap_volume = cell_a.solid.common(cell_b.solid).Volume
-            smaller_cell_volume = min(cell_a.volume, cell_b.volume)
-            if overlap_volume > 1.0e-6 * smaller_cell_volume:
-                overlaps.append({"cell_a": cell_a.cell_id, "cell_b": cell_b.cell_id, "region_a": cell_a.region_name, "region_b": cell_b.region_name, "overlap_volume": overlap_volume, "smaller_cell_volume": smaller_cell_volume})
-    return overlaps
+    if isinstance(surface_a, Part.Plane) and isinstance(surface_b, Part.Plane):
+        normal_a = App.Vector(surface_a.Axis).normalize()
+        normal_b = App.Vector(surface_b.Axis).normalize()
+        if abs(normal_a.dot(normal_b)) < 1.0 - PARALLEL_NORMAL_TOLERANCE:
+            return False
+        plane_offset = abs((App.Vector(surface_b.Position) - App.Vector(surface_a.Position)).dot(normal_a))
+        return plane_offset < length_tolerance
+
+    if isinstance(surface_a, Part.Cylinder) and isinstance(surface_b, Part.Cylinder):
+        if abs(surface_a.Radius - surface_b.Radius) > length_tolerance:
+            return False
+        axis_a = App.Vector(surface_a.Axis).normalize()
+        if abs(axis_a.dot(App.Vector(surface_b.Axis).normalize())) < 1.0 - PARALLEL_NORMAL_TOLERANCE:
+            return False
+        center_offset = App.Vector(surface_b.Center) - App.Vector(surface_a.Center)
+        offset_off_axis = center_offset - axis_a * center_offset.dot(axis_a)
+        return offset_off_axis.Length < length_tolerance
+
+    if isinstance(surface_a, (Part.Plane, Part.Cylinder)) and isinstance(surface_b, (Part.Plane, Part.Cylinder)):
+        return False  # a plane and a cylinder meet along a line at most
+    return True
 
 
 def find_near_contacts(cells, fuzzy_tolerance, near_contact_tolerance, overlapping_cell_pairs):
@@ -412,6 +475,16 @@ def find_near_contacts(cells, fuzzy_tolerance, near_contact_tolerance, overlappi
             if cell_pair in sharing_cell_pairs or cell_pair in overlapping_cell_pairs:
                 continue
 
+            # Cheap lower bound on the gap from each cell's axial slab and
+            # radial extent: two points are at least |dz| apart and at least
+            # |r_p - r_q| apart (triangle inequality). For annuli this prunes
+            # far better than Cartesian bounding boxes, which nest inside
+            # each other.
+            axial_gap = max(cell_a.z_min - cell_b.z_max, cell_b.z_min - cell_a.z_max, 0.0)
+            radial_gap = max(cell_a.r_inner - cell_b.r_outer, cell_b.r_inner - cell_a.r_outer, 0.0)
+            if max(axial_gap, radial_gap) >= near_contact_tolerance:
+                continue
+
             enlarged_bounding_box = App.BoundBox(cell_a.solid.BoundBox)
             enlarged_bounding_box.enlarge(near_contact_tolerance)
             if not enlarged_bounding_box.intersect(cell_b.solid.BoundBox):
@@ -420,11 +493,18 @@ def find_near_contacts(cells, fuzzy_tolerance, near_contact_tolerance, overlappi
             gap = cell_a.solid.distToShape(cell_b.solid)[0]
 
             if gap <= fuzzy_tolerance:
+                # Most such pairs touch only along an edge (e.g. diagonal
+                # neighbours in two stacked 30-cell regions). An area contact
+                # needs two faces on the same surface, so only those face
+                # pairs get the (expensive) boolean.
                 touching_area = 0.0
                 for face_a in cell_a.solid.Faces:
                     for face_b in cell_b.solid.Faces:
-                        if face_a.BoundBox.intersect(face_b.BoundBox):
-                            touching_area += face_a.common(face_b, fuzzy_tolerance).Area
+                        if not face_a.BoundBox.intersect(face_b.BoundBox):
+                            continue
+                        if not faces_lie_on_same_surface(face_a, face_b, fuzzy_tolerance):
+                            continue
+                        touching_area += face_a.common(face_b, fuzzy_tolerance).Area
                 smaller_cell_area = min(cell_a.solid.Area, cell_b.solid.Area)
                 if touching_area > 1.0e-6 * smaller_cell_area:
                     missed_contact_warnings.append(f"cells {cell_a.cell_id} ({cell_a.region_name}) and {cell_b.cell_id} ({cell_b.region_name}) touch over {touching_area:.6g} mm^2 but no interface was found; try a larger FuzzyTolerance")

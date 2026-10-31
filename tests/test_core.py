@@ -31,7 +31,7 @@ from rom_geometry.core.axis_geometry import EngineAxis
 from rom_geometry.core.boundary_patches import face_fingerprint, rematch_face
 from rom_geometry.core.distances import cylindrical_half_cell_distance
 from rom_geometry.core.export_json import ExportRefusedError, export_rom_geometry
-from rom_geometry.core.model_build import ROMModelSpec
+from rom_geometry.core.model_build import ROMModelSpec, build_rom_geometry, summarize_for_review
 from rom_geometry.core.regions import RegionSpec, build_region_geometry
 from rom_geometry.core.source_shapes import merge_source_shapes, split_shape_between_bodies
 
@@ -336,6 +336,28 @@ class FailureCaseTests(unittest.TestCase):
         liner_overlap_error = [error for error in overlap_errors if "(liner)" in error][0]
         self.assertIn(f"{expected_liner_overlap:.6g} mm^3", liner_overlap_error)
 
+    def test_review_summary_lists_interfaces_gaps_and_unassigned_area(self):
+        model_spec = build_fixture.fixture_model_spec(self.doc, ignored_interfaces=["end_cap_outer|end_cap_center"])
+        build = build_rom_geometry(model_spec)
+        interface_summaries, near_contact_summaries, unassigned_summaries = summarize_for_review(build)
+
+        summary_by_pair = {(summary.region_a, summary.region_b): summary for summary in interface_summaries}
+        self.assertEqual(set(summary_by_pair), {("cavity", "liner"), ("cavity", "end_cap_center"), ("liner", "housing"), ("liner", "end_cap_outer"), ("housing", "end_cap_outer"), ("end_cap_center", "end_cap_outer")})
+
+        cavity_liner_area = 2 * math.pi * 18.0 * 60.0
+        self.assertLess(abs(summary_by_pair[("cavity", "liner")].area - cavity_liner_area), 1.0e-9 * cavity_liner_area)
+        self.assertEqual(len(summary_by_pair[("cavity", "liner")].faces), 3)
+        self.assertFalse(summary_by_pair[("cavity", "liner")].ignored)
+        self.assertTrue(summary_by_pair[("end_cap_center", "end_cap_outer")].ignored)
+
+        self.assertEqual(len(near_contact_summaries), 3)
+        self.assertEqual(len(near_contact_summaries[0]["solids"]), 2)
+
+        # The housing's outer wall is patched; only its bottom ring is unassigned.
+        unassigned_by_region = {summary.region: summary for summary in unassigned_summaries}
+        housing_bottom_area = math.pi * (24.0 ** 2 - 20.0 ** 2)
+        self.assertLess(abs(unassigned_by_region["housing"].area - housing_bottom_area), 1.0e-9 * housing_bottom_area)
+
     def test_ignored_interface_becomes_unpatched_boundary(self):
         model_spec = build_fixture.fixture_model_spec(self.doc, ignored_interfaces=["end_cap_outer|end_cap_center"])
         build, report, export = export_rom_geometry(model_spec)
@@ -365,7 +387,12 @@ class FailureCaseTests(unittest.TestCase):
         self.assertEqual(sorted(face["surface"] for face in plug_to_cup_faces), ["cylinder", "plane"])
         for face in plug_to_cup_faces:
             self.assertIn("kept separate", face["notes"])
-        self.assertTrue(any("refused merge" in warning for warning in report.warnings))
+
+        # One note per cell pair (not one from each side), and not a warning.
+        stepped_contact_notes = [note for note in report.notes if "different surfaces" in note]
+        self.assertEqual(len(stepped_contact_notes), 1)
+        self.assertIn("cell 1 (cup) meets cell 2 (plug) on 2 different surfaces", stepped_contact_notes[0])
+        self.assertFalse(any("different surfaces" in warning for warning in report.warnings))
 
     def test_empty_region_is_an_error(self):
         empty_region = RegionSpec("nothing_here", "air", ["housing"], [Part.getShape(self.doc.getObject("housing"))], 500.0, 600.0)

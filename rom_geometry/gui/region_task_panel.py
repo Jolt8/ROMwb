@@ -21,7 +21,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtGui
 
-from rom_geometry.objects.object_helpers import property_expression
+from rom_geometry.objects.object_helpers import plain_sub_path, property_expression
 
 
 # Max above min: the larger number sits on top, like the geometry.
@@ -54,7 +54,7 @@ def reference_text(reference_value):
         return "(none)"
     top_object, sub_names = reference_value
     sub_name = sub_names[0] if sub_names else ""
-    return f"{top_object.Label}.{sub_name}".rstrip(".")
+    return f"{top_object.Label}.{plain_sub_path(sub_name)}".rstrip(".")
 
 
 class RegionTaskPanel:

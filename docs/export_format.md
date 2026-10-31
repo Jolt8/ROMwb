@@ -38,7 +38,7 @@ already uses** for its `FVMGeometry` / `CellFaceLayout`. That way
 | `facetsets` | face-set name → list of `[cell_id, local_idx]` |
 | `unassigned_boundary_faces` | boundary faces with no patch (adiabatic unless you add one) |
 | `near_contacts` | cell pairs closer than `NearContactTolerance` that share no face |
-| `validation` | `{errors: [], warnings: [...]}`. An exported file always has no errors. |
+| `validation` | `{errors: [], warnings: [...], notes: [...]}`. An exported file always has no errors. Notes are information only. |
 
 ### `parameters`
 
@@ -96,7 +96,7 @@ through it). `r_outer` is the largest radius the cell reaches.
 | `neighbor_distance` | interfaces only: own + neighbour's half-cell distance, m |
 | `centroid_distance` | interfaces only: straight centroid-to-centroid distance, m (reference only) |
 | `distance_method` | `planar`, `cylindrical_log` or `approximate` |
-| `notes` | why something was done (fallbacks, refused merges), `; `-separated |
+| `notes` | why something was done (fallbacks, faces kept separate), `; `-separated |
 
 Local face order is: interfaces (by neighbour id), then patch faces, then
 ignored interfaces, then unassigned boundary faces.
@@ -117,10 +117,13 @@ facing the same way**: planes with the same outward normal, or coaxial
 cylinders of the same radius on the same side. Merged area = sum and merged
 centroid = area-weighted centroid.
 
-A plane and a cylinder to the same neighbour (e.g. a plug sitting in a cup)
-are **not** merged, because the merged face would have no single normal or
-distance. They stay separate faces with a `notes` entry, and validation
-reports a "refused merge" warning.
+A plane and a cylinder to the same neighbour (e.g. a retainer seated in a
+step), or two cylinders of different radius to one patch (a stepped outer
+wall), are **not** merged, because the merged face would have no single
+normal or distance. They stay separate faces, each with its own correct
+normal and distance, and each gets a face-level `notes` entry. Validation
+adds one *note* (not a warning) per cell pair or cell/patch. This is normal
+and needs no action.
 
 ## Half-cell distances
 
@@ -201,6 +204,17 @@ covers at least 99% of the half-face's area. A half-face on two patches is
 an error. Half-faces with no patch go in `unassigned_boundary_faces`, so
 adiabatic surfaces are a visible choice.
 
+Re-matching: each picked face is stored with a fingerprint (centre of mass,
+area, surface type, normal at the centre, and radius and axis for cylinders),
+and is found again by geometry before every export:
+- **exact:** same surface, centroid within `FuzzyTolerance`, area within 1e-6;
+- **loose:** same surface (plane normal, or cylinder radius and axis), area
+  within 20%, centroid within 0.2·√area, and only one such face. The match
+  is accepted with a warning and the fingerprint is refreshed.
+
+Anything else (no match, or several) is a validation error, so the export
+is refused.
+
 ## Validation
 
 Errors (the export is refused):
@@ -222,7 +236,11 @@ Warnings:
   touch only along an edge or at a point are not reported. If such a pair
   actually touches over an area, a "no interface was found" warning is given
   (raise `FuzzyTolerance`).
-- Unassigned boundary area per region (m²).
+- Unassigned boundary area per region (mm², like the rest of FreeCAD).
 - Faces with `approximate` distances.
-- Refused merges.
 - Zero half-cell distances.
+
+Notes (information only):
+
+- Cells that meet one neighbour, or one patch, on several different surfaces
+  (stepped contacts), kept as separate faces.

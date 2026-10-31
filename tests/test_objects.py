@@ -28,7 +28,8 @@ import FreeCAD as App
 import Part
 
 import build_fixture
-from rom_geometry.core.export_json import export_rom_geometry
+from rom_geometry.core.export_json import ExportRefusedError, export_rom_geometry
+from rom_geometry.objects.rom_boundary_patch import add_faces_to_patch, create_boundary_patch, read_patch_entries, replace_patch_face
 from rom_geometry.objects.rom_model import create_rom_model, export_rom_model, find_rom_models, rom_regions_of_model
 from rom_geometry.objects.rom_region import create_rom_region, region_spec_from_object
 from rom_geometry.objects.source_features import create_fastener_parts
@@ -290,6 +291,155 @@ class SourceFeatureTests(unittest.TestCase):
         self.assertAlmostEqual(region_object.Shape.Volume, math.pi * 25.0 * 20.0, places=6)
 
 
+def face_index_where(shape, predicate):
+    matching_indices = [face_index for face_index, face in enumerate(shape.Faces, start=1) if predicate(face)]
+    if len(matching_indices) != 1:
+        raise RuntimeError(f"expected one matching face, found {len(matching_indices)}")
+    return matching_indices[0]
+
+
+def is_outer_housing_wall(face):
+    return isinstance(face.Surface, Part.Cylinder) and abs(face.Surface.Radius - 24.0) < 1e-9
+
+
+class BoundaryPatchTests(unittest.TestCase):
+    """Patches on the fixture, picked as (fixture object, "FaceN") like a
+    selection would give them. The same three patches as the core fixture,
+    so the object export must match the core export exactly."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.temporary_directory = tempfile.TemporaryDirectory()
+        fixture_path = build_fixture.build_fixture_document(cls.temporary_directory.name)
+        App.closeDocument(build_fixture.FIXTURE_DOCUMENT_NAME)
+        cls.fixture_doc = App.openDocument(fixture_path)
+        cls.rom_doc = build_rom_document(cls.fixture_doc, cls.temporary_directory.name)
+        cls.model_object = find_rom_models(cls.rom_doc)[0]
+
+        housing = cls.fixture_doc.getObject("housing")
+        end_cap = cls.fixture_doc.getObject("end_cap")
+        nozzle = cls.fixture_doc.getObject("nozzle")
+        housing_wall_index = face_index_where(housing.Shape, is_outer_housing_wall)
+        end_cap_top_index = face_index_where(end_cap.Shape, lambda face: isinstance(face.Surface, Part.Plane) and abs(face.CenterOfMass.z - 65.0) < 1e-9)
+        nozzle_bore_index = face_index_where(nozzle.Shape, lambda face: isinstance(face.Surface, Part.Cone))
+
+        cls.housing_patch = create_boundary_patch(cls.model_object, "housing_ambient", [(housing, f"Face{housing_wall_index}")])
+        create_boundary_patch(cls.model_object, "end_cap_top", [(end_cap, f"Face{end_cap_top_index}")])
+        create_boundary_patch(cls.model_object, "nozzle_bore", [(nozzle, f"Face{nozzle_bore_index}")])
+        cls.rom_doc.recompute()
+
+    @classmethod
+    def tearDownClass(cls):
+        for document_name in list(App.listDocuments()):
+            App.closeDocument(document_name)
+        cls.temporary_directory.cleanup()
+
+    def test_1_patch_export_matches_core_export(self):
+        self.assertTrue(self.housing_patch.Status.startswith("1 face(s)"), self.housing_patch.Status)
+        build, report, object_export = export_rom_model(self.model_object, os.path.join(self.temporary_directory.name, "patched.json"))
+        core_build, core_report, core_export = export_rom_geometry(build_fixture.fixture_model_spec(self.fixture_doc))
+
+        self.assertEqual(object_export["facetsets"], core_export["facetsets"])
+        self.assertEqual(len(object_export["unassigned_boundary_faces"]), len(core_export["unassigned_boundary_faces"]))
+        self.assertIn("housing_ambient", object_export["facetsets"])
+
+    def test_2_patch_follows_its_face_when_the_cad_renumbers_faces(self):
+        # Put a small boss on top of the housing wall (r 21..22 mm, so the
+        # outer wall at r = 24 mm is untouched) and fuse it in FIRST, so its
+        # faces come first and the outer wall gets a new number.
+        housing = self.fixture_doc.getObject("housing")
+        old_wall_index = face_index_where(housing.Shape, is_outer_housing_wall)
+
+        boss = self.fixture_doc.addObject("Part::Box", "boss")
+        boss.Length = 1.0
+        boss.Width = 1.0
+        boss.Height = 1.0
+        boss.Placement.Base = App.Vector(-0.5, 21.0, 60.0)
+        housing_outer_with_boss = self.fixture_doc.addObject("Part::MultiFuse", "housing_outer_with_boss")
+        housing_outer_with_boss.Shapes = [boss, self.fixture_doc.getObject("housing_outer")]
+        housing.Base = housing_outer_with_boss
+        self.fixture_doc.recompute()
+
+        new_wall_index = face_index_where(housing.Shape, is_outer_housing_wall)
+        self.assertNotEqual(new_wall_index, old_wall_index, "the edit did not renumber the faces, so this test proves nothing")
+
+        self.housing_patch.touch()
+        self.rom_doc.recompute()
+        self.assertTrue(self.housing_patch.Status.startswith("1 face(s)"), self.housing_patch.Status)
+        stored_sub_path = read_patch_entries(self.housing_patch)[0]["sub"]
+        self.assertEqual(stored_sub_path, f"Face{new_wall_index}")
+        self.assertEqual(list(self.housing_patch.Faces[0][1]), [f"Face{new_wall_index}"])
+
+        build, report, export = export_rom_model(self.model_object, os.path.join(self.temporary_directory.name, "renumbered.json"))
+        housing_ambient_area = 0.0
+        for cell_id, local_idx in export["facetsets"]["housing_ambient"]:
+            housing_ambient_area += export["cells"][cell_id - 1]["faces"][local_idx - 1]["area"]
+        expected_area = 2 * math.pi * 0.024 * 0.060
+        self.assertLess(abs(housing_ambient_area - expected_area), 1.0e-9 * expected_area)
+
+
+class PatchRematchFailureTests(unittest.TestCase):
+    """A patch on the top face of a 10 mm cube, whose CAD then changes."""
+
+    def setUp(self):
+        self.doc = App.newDocument("patch_failure_test")
+        self.block = self.doc.addObject("Part::Feature", "block")
+        self.block.Shape = Part.makeBox(10, 10, 10)
+        self.model_object = create_rom_model(self.doc)
+        create_rom_region(self.model_object, "block_region", [self.block], z_min=0.0, z_max=10.0)
+        top_face_index = face_index_where(self.block.Shape, lambda face: abs(face.CenterOfMass.z - 10.0) < 1e-9)
+        self.patch_object = create_boundary_patch(self.model_object, "top", [(self.block, f"Face{top_face_index}")])
+        self.doc.recompute()
+
+    def tearDown(self):
+        App.closeDocument(self.doc.Name)
+
+    def test_small_move_is_rematched_loosely_then_exactly(self):
+        self.block.Shape = Part.makeBox(10, 10, 10.5)
+        self.doc.recompute()
+        self.assertIn("re-matched by surface type", self.patch_object.Status)
+        self.assertFalse(self.patch_object.Shape.isNull())
+
+        # The fingerprint was refreshed, so the next re-match is exact.
+        self.patch_object.touch()
+        self.doc.recompute()
+        self.assertEqual(self.patch_object.Status, "1 face(s), 100 mm^2")
+
+    def test_ambiguous_face_fails_loudly_and_blocks_export(self):
+        # The top face is replaced by two equally plausible faces nearby.
+        left_block = Part.makeBox(10, 10, 10, App.Vector(-1, 0, 0))
+        right_block = Part.makeBox(10, 10, 10, App.Vector(1, 0, 0))
+        self.block.Shape = Part.makeCompound([left_block, right_block])
+        self.doc.recompute()
+
+        self.assertIn("patch 'top'", self.patch_object.Status)
+        self.assertIn("ambiguous", self.patch_object.Status)
+        self.assertTrue(self.patch_object.Shape.isNull())
+        with self.assertRaises(ExportRefusedError) as refusal:
+            export_rom_model(self.model_object, os.path.join(tempfile.gettempdir(), "never_written.json"))
+        self.assertTrue(any("ambiguous" in error and "Re-pick" in error for error in refusal.exception.report.errors))
+
+    def test_removed_face_fails_loudly(self):
+        self.block.Shape = Part.makeCylinder(5, 10)
+        self.doc.recompute()
+        self.assertIn("no face matches", self.patch_object.Status)
+
+    def test_selection_paths_with_mapped_names_are_stored_plain(self):
+        # FreeCAD 1.x selections carry the topological-naming name, e.g.
+        # ";Face2;:H10eb,F.Face2"; the patch must store plain "Face2".
+        add_faces_to_patch(self.patch_object, [(self.block, ";Face2;:H10eb,F.Face2")])
+        self.doc.recompute()
+        self.assertEqual(read_patch_entries(self.patch_object)[-1]["sub"], "Face2")
+        self.assertTrue(self.patch_object.Status.startswith("2 face(s)"), self.patch_object.Status)
+
+    def test_repick_replaces_the_face(self):
+        bottom_face_index = face_index_where(self.block.Shape, lambda face: abs(face.CenterOfMass.z) < 1e-9)
+        replace_patch_face(self.patch_object, 0, self.block, f"Face{bottom_face_index}")
+        self.doc.recompute()
+        self.assertEqual(read_patch_entries(self.patch_object)[0]["sub"], f"Face{bottom_face_index}")
+        self.assertAlmostEqual(self.patch_object.Shape.Faces[0].CenterOfMass.z, 0.0, places=9)
+
+
 class LimitReferenceTests(unittest.TestCase):
     """Assembly4-style layout:
       part document:      Body with bottom_lcs (z = 2) and top_lcs (z = 18),
@@ -388,6 +538,16 @@ class LimitReferenceTests(unittest.TestCase):
         self.rom_doc.recompute()
         self.assertIn("gives no radial position", region_object.Status)
         self.assertTrue(region_object.Shape.isNull())
+
+    def test_patch_face_picked_through_assembly_links(self):
+        # Picked in the tree as Assembly > CylinderLink > top face: the patch
+        # face must sit where the assembly puts it (z = 50 + 100 + 20 = 170).
+        top_face_index = face_index_where(self.cylinder_link.LinkedObject.Shape, lambda face: isinstance(face.Surface, Part.Plane) and face.CenterOfMass.z > 10)
+        patch_object = create_boundary_patch(self.model_object, "cylinder_top", [(self.container, f"CylinderLink.Face{top_face_index}")])
+        self.rom_doc.recompute()
+        self.assertTrue(patch_object.Status.startswith("1 face(s)"), patch_object.Status)
+        self.assertAlmostEqual(patch_object.Shape.Faces[0].CenterOfMass.z, 170.0, places=9)
+        self.rom_doc.removeObject(patch_object.Name)
 
     def test_reference_replaces_an_expression(self):
         region_object = self.new_region("reference_wins")

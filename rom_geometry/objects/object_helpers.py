@@ -20,6 +20,48 @@ def global_shape(document_object):
     return shape
 
 
+def plain_sub_path(sub_path):
+    """Drop FreeCAD 1.x's topological-naming part from a selection path.
+
+    Clicking a face gives e.g. "Body.;Face12;:H10eb,F.Face12": the link path
+    "Body.", the mapped element name ";Face12;:H10eb,F" and the plain name
+    "Face12". The ROM objects store the plain form "Body.Face12" and re-find
+    faces by their own geometric fingerprint instead.
+    """
+    if ";" not in sub_path:
+        return sub_path
+    object_path = sub_path[:sub_path.index(";")]
+    plain_element_name = sub_path.rsplit(".", 1)[-1]
+    return object_path + plain_element_name
+
+
+def split_element_path(sub_path):
+    """"Body.Face12" -> ("Body.", "Face12"); "Face3" -> ("", "Face3")."""
+    if "." not in sub_path:
+        return "", sub_path
+    object_path, element_name = sub_path.rsplit(".", 1)
+    return object_path + ".", element_name
+
+
+def owner_shape_global(top_object, object_path):
+    """Shape of the object an element belongs to, in global coordinates.
+
+    `object_path` is the link path below `top_object` ("" = top_object
+    itself), e.g. "BodyLink." when a face was picked as
+    (Assembly, "BodyLink.Face12"). Its faces are numbered exactly like the
+    element names in that path, so "Face12" is shape.Faces[11].
+    """
+    if object_path:
+        shape = top_object.getSubObject(object_path)
+    else:
+        shape = Part.getShape(top_object)
+    parent_container = top_object.getParentGeoFeatureGroup()
+    if parent_container is not None:
+        shape = shape.copy()
+        shape.Placement = parent_container.getGlobalPlacement().multiply(shape.Placement)
+    return shape
+
+
 def reference_position(link_sub_value, engine_axis, length_tolerance=1.0e-6):
     """Where a picked reference sits relative to the engine axis.
 
@@ -43,7 +85,7 @@ def reference_position(link_sub_value, engine_axis, length_tolerance=1.0e-6):
     sub_name = sub_names[0] if sub_names else ""
     element_name = sub_name.split(".")[-1] if sub_name else ""
     parent_container = top_object.getParentGeoFeatureGroup()
-    description = f"{top_object.Label}.{sub_name}" if sub_name else top_object.Label
+    description = f"{top_object.Label}.{plain_sub_path(sub_name)}" if sub_name else top_object.Label
 
     # A face, edge or vertex: getSubObject returns the element shape already
     # moved through the link chain. The top object's own container is applied

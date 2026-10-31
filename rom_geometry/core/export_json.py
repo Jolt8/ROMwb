@@ -157,18 +157,18 @@ def build_export_dict(build, report):
     for near_contact in build.near_contacts:
         export["near_contacts"].append({"region_a": near_contact["region_a"], "region_b": near_contact["region_b"], "cell_a": near_contact["cell_a"], "cell_b": near_contact["cell_b"], "gap": near_contact["gap"] * MILLIMETRE_TO_METRE})
 
-    export["validation"] = {"errors": list(report.errors), "warnings": list(report.warnings)}
+    export["validation"] = {"errors": list(report.errors), "warnings": list(report.warnings), "notes": list(report.notes)}
     return export
 
 
-def export_rom_geometry(model_spec, output_path=None):
+def export_rom_geometry(model_spec, output_path=None, progress_callback=None):
     """Build, validate and (if there are no errors) write the JSON.
 
     Returns (build, report, export_dict). Raises ExportRefusedError if
     validation found errors; nothing is written in that case. With
     output_path=None nothing is written (useful for tests).
     """
-    build = build_rom_geometry(model_spec)
+    build = build_rom_geometry(model_spec, progress_callback)
     report = validate_rom_geometry(build)
 
     if not report.is_valid:

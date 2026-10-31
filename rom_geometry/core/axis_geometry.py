@@ -13,11 +13,16 @@ import Part
 # classifier precision (about 1e-7 mm).
 INSIDE_PROBE_STEP = 1.0e-3
 
-# Tessellation tolerance used when a face has no closed-form area vector
-# (cones, fillets, B-splines). The polygon area error is roughly
-# (tolerance / radius) of the projected area, which is about 1e-4 for the
-# engine's 10-20 mm radii.
-TESSELLATION_TOLERANCE = 1.0e-3
+# Coarse tessellation, used only to find a point on a face (that point is
+# then projected onto the exact surface, so the coarseness costs nothing).
+SAMPLE_TESSELLATION_TOLERANCE = 0.05
+
+# Tessellation tolerance used when a face has no closed-form area vector or
+# centroid (cones, fillets, B-splines). The polygon area error is roughly
+# (tolerance / radius) of the projected area, about 1e-3 for the engine's
+# 7-20 mm radii. Finer meshes cost far more: at 1e-3 mm, tessellation took
+# ~45 s of a 60 s export of the hybrid engine.
+TESSELLATION_TOLERANCE = 1.0e-2
 
 
 class EngineAxis:
@@ -141,8 +146,9 @@ def describe_face_surface(face, engine_axis, length_tolerance):
     return description
 
 
-def outward_face_samples(face, cell_shape):
-    """Points on the face, the outward normal there, and the outward area vector.
+def outward_face_samples(face, cell_shape, need_area_vector=False):
+    """A point on the face, the outward normal there, and (optionally) the
+    outward area vector.
 
     "Outward" means pointing out of `cell_shape`. Because an interface
     sub-face is shared by two cells, its stored orientation only suits one of
@@ -150,32 +156,27 @@ def outward_face_samples(face, cell_shape):
     and ask whether that point is inside the cell.
 
     Returns (representative_point, outward_normal_at_point, outward_area_vector).
-    The representative point is the projection of the centroid of the face's
-    largest tessellation triangle onto the surface, so it always lies on the
-    face (an area centroid can fall in a hole, e.g. for an annulus).
-    The area vector is the sum over tessellation triangles of
-    (triangle area x triangle normal), which is exact for planes and close
-    for curved faces.
+    The representative point is the centroid of the face's largest coarse
+    tessellation triangle, projected onto the exact surface, so it always lies
+    on the face (an area centroid can fall in a hole, e.g. for an annulus).
+
+    The area vector (sum of n dA) is only needed for faces with no closed
+    form (cones, fillets); pass need_area_vector=True for those. It is the
+    sum over a finer tessellation of (triangle area x triangle normal).
+    Otherwise None is returned for it.
     """
-    tessellation_points, tessellation_triangles = face.tessellate(TESSELLATION_TOLERANCE)
+    sample_points, sample_triangles = face.tessellate(SAMPLE_TESSELLATION_TOLERANCE)
 
     largest_triangle_area = -1.0
     largest_triangle_centroid = None
-    tessellated_area_vector = App.Vector(0, 0, 0)
-
-    for triangle in tessellation_triangles:
-        point_a = tessellation_points[triangle[0]]
-        point_b = tessellation_points[triangle[1]]
-        point_c = tessellation_points[triangle[2]]
-
-        triangle_area_vector = (point_b - point_a).cross(point_c - point_a) * 0.5
-        tessellated_area_vector = tessellated_area_vector + triangle_area_vector
-
-        triangle_area = triangle_area_vector.Length
+    for triangle in sample_triangles:
+        point_a = sample_points[triangle[0]]
+        point_b = sample_points[triangle[1]]
+        point_c = sample_points[triangle[2]]
+        triangle_area = (point_b - point_a).cross(point_c - point_a).Length * 0.5
         if triangle_area > largest_triangle_area:
             largest_triangle_area = triangle_area
             largest_triangle_centroid = (point_a + point_b + point_c) * (1.0 / 3.0)
-            largest_triangle_area_vector = triangle_area_vector
 
     surface_u, surface_v = face.Surface.parameter(largest_triangle_centroid)
     representative_point = face.Surface.value(surface_u, surface_v)
@@ -184,13 +185,37 @@ def outward_face_samples(face, cell_shape):
     probe_point = representative_point + surface_normal * INSIDE_PROBE_STEP
     probe_is_inside_cell = cell_shape.isInside(probe_point, 1.0e-9, True)
     if probe_is_inside_cell:
-        outward_normal = surface_normal * -1.0
+        outward_sign = -1.0
     else:
-        outward_normal = surface_normal
+        outward_sign = 1.0
+    outward_normal = surface_normal * outward_sign
+
+    if not need_area_vector:
+        return representative_point, outward_normal, None
+
+    tessellation_points, tessellation_triangles = face.tessellate(TESSELLATION_TOLERANCE)
+    tessellated_area_vector = App.Vector(0, 0, 0)
+    largest_triangle_area = -1.0
+    for triangle in tessellation_triangles:
+        point_a = tessellation_points[triangle[0]]
+        point_b = tessellation_points[triangle[1]]
+        point_c = tessellation_points[triangle[2]]
+        triangle_area_vector = (point_b - point_a).cross(point_c - point_a) * 0.5
+        tessellated_area_vector = tessellated_area_vector + triangle_area_vector
+        if triangle_area_vector.Length > largest_triangle_area:
+            largest_triangle_area = triangle_area_vector.Length
+            largest_triangle_area_vector = triangle_area_vector
+            largest_triangle_centroid = (point_a + point_b + point_c) * (1.0 / 3.0)
 
     # Tessellation triangles of one face are consistently wound, so one
-    # triangle tells us whether the summed area vector points outward.
-    if largest_triangle_area_vector.dot(outward_normal) < 0:
+    # triangle decides whether the summed area vector points outward. Compare
+    # it with the outward normal AT THAT TRIANGLE: on a cone the normals on
+    # opposite sides point opposite ways, so a normal taken elsewhere on the
+    # face cannot decide. The surface's own normal is continuous over the
+    # whole face, and outward_sign maps it to "outward".
+    triangle_u, triangle_v = face.Surface.parameter(largest_triangle_centroid)
+    outward_normal_at_triangle = App.Vector(face.Surface.normal(triangle_u, triangle_v)) * outward_sign
+    if largest_triangle_area_vector.dot(outward_normal_at_triangle) < 0:
         tessellated_area_vector = tessellated_area_vector * -1.0
 
     return representative_point, outward_normal, tessellated_area_vector

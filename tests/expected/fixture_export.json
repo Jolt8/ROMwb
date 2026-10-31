@@ -6,7 +6,7 @@
   "freecad_version": "1.1.4"
  },
  "source_document": "tests/rom_fixture.FCStd (built by tests/build_fixture.py)",
- "exported_at": "2026-10-31T01:46:32-06:00",
+ "exported_at": "2026-10-31T15:44:12-06:00",
  "axis": {
   "origin": [
    0.0,
@@ -1291,7 +1291,7 @@
      "outward": null,
      "normal": null,
      "meridional_normal": [
-      -0.7808688094430303,
+      -0.7808688094430305,
       0.6246950475544244
      ],
      "centroid": [
@@ -1299,7 +1299,7 @@
       0.0,
       -0.004723809523809523
      ],
-     "half_cell_distance": 0.0014762402127333455,
+     "half_cell_distance": 0.001476240212733349,
      "distance_method": "approximate",
      "notes": "approximate: meridional normal distance from the cell node (r_c, z_centroid) to a point on the face"
     },
@@ -1610,12 +1610,13 @@
    "near-contact: cells 1 (cavity) and 11 (nozzle) are 0.2 mm apart but share no face",
    "near-contact: cells 4 (liner) and 11 (nozzle) are 0.2 mm apart but share no face",
    "near-contact: cells 7 (housing) and 11 (nozzle) are 0.2 mm apart but share no face",
-   "region 'cavity': 0.00101788 m^2 of boundary has no patch (adiabatic unless you add one)",
-   "region 'liner': 0.000238761 m^2 of boundary has no patch (adiabatic unless you add one)",
-   "region 'housing': 0.00055292 m^2 of boundary has no patch (adiabatic unless you add one)",
-   "region 'end_cap_outer': 0.000753982 m^2 of boundary has no patch (adiabatic unless you add one)",
-   "region 'nozzle': 0.00379504 m^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'cavity': 1017.88 mm^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'liner': 238.761 mm^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'housing': 552.92 mm^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'end_cap_outer': 753.982 mm^2 of boundary has no patch (adiabatic unless you add one)",
+   "region 'nozzle': 3795.04 mm^2 of boundary has no patch (adiabatic unless you add one)",
    "cell 11 (nozzle) face 1: cone face, half-cell distance is approximate"
-  ]
+  ],
+  "notes": []
  }
 }

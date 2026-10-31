@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from rom_geometry.core.axis_geometry import EngineAxis, outward_face_samples, shape_volume_and_centroid
 from rom_geometry.core.boundary_patches import assign_boundary_sub_faces_to_patches
 from rom_geometry.core.distances import cell_radial_extent, compute_cell_face_distances
-from rom_geometry.core.interfaces import CellRecord, build_cell_faces, connect_interface_half_faces, find_cell_overlaps, find_near_contacts, split_cells_into_sub_faces
+from rom_geometry.core.interfaces import CellRecord, build_cell_faces, connect_interface_half_faces, find_near_contacts, split_cells_into_sub_faces
 from rom_geometry.core.parameters import read_spreadsheet_parameters
 from rom_geometry.core.regions import build_region_geometry
 
@@ -50,6 +50,72 @@ class ROMGeometryBuild:
     warnings: list = field(default_factory=list)
 
 
+@dataclass
+class InterfaceSummary:
+    """One region pair's shared surface, for the interface review panel."""
+    region_a: str
+    region_b: str
+    area: float
+    faces: list
+    ignored: bool
+
+
+@dataclass
+class UnassignedSurfaceSummary:
+    """A region's boundary area that no patch claims (adiabatic unless patched)."""
+    region: str
+    area: float
+    faces: list
+
+
+def summarize_for_review(build):
+    """Region-pair interfaces (detected and ignored), near-contacts and
+    unassigned outer surfaces, with the actual faces so the GUI can
+    highlight them. Areas in mm^2.
+
+    Each interface is counted once, from the side of the region that comes
+    first in the model order. Axial faces inside one region are not listed:
+    they are not a modelling choice.
+    """
+    cell_by_id = {cell.cell_id: cell for cell in build.cells}
+    interface_summaries = {}
+    unassigned_summaries = {}
+
+    for cell in build.cells:
+        for cell_face in cell.faces:
+            sub_face_shapes = [build.sub_faces[sub_face_id].face for sub_face_id in cell_face.sub_face_ids]
+
+            if cell_face.kind in ("interface", "ignored_interface"):
+                if cell_face.kind == "interface":
+                    neighbor_cell = cell_by_id[cell_face.neighbor_cell]
+                else:
+                    neighbor_cell = cell_by_id[cell_face.ignored_neighbor_cell]
+                if neighbor_cell.region_name == cell.region_name:
+                    continue
+                if cell.region_order > neighbor_cell.region_order:
+                    continue
+
+                region_pair = (cell.region_name, neighbor_cell.region_name)
+                if region_pair not in interface_summaries:
+                    interface_summaries[region_pair] = InterfaceSummary(cell.region_name, neighbor_cell.region_name, 0.0, [], cell_face.kind == "ignored_interface")
+                interface_summaries[region_pair].area += cell_face.area
+                interface_summaries[region_pair].faces.extend(sub_face_shapes)
+
+            elif cell_face.kind == "boundary" and cell_face.patch is None:
+                if cell.region_name not in unassigned_summaries:
+                    unassigned_summaries[cell.region_name] = UnassignedSurfaceSummary(cell.region_name, 0.0, [])
+                unassigned_summaries[cell.region_name].area += cell_face.area
+                unassigned_summaries[cell.region_name].faces.extend(sub_face_shapes)
+
+    near_contact_summaries = []
+    for near_contact in build.near_contacts:
+        near_contact_with_solids = dict(near_contact)
+        near_contact_with_solids["solids"] = [cell_by_id[near_contact["cell_a"]].solid, cell_by_id[near_contact["cell_b"]].solid]
+        near_contact_summaries.append(near_contact_with_solids)
+
+    return list(interface_summaries.values()), near_contact_summaries, list(unassigned_summaries.values())
+
+
 def parse_ignored_interfaces(ignored_interfaces, region_names):
     """"region_a|region_b" strings -> set of frozensets. Order does not matter."""
     ignored_region_pairs = set()
@@ -66,13 +132,22 @@ def parse_ignored_interfaces(ignored_interfaces, region_names):
     return ignored_region_pairs, warnings
 
 
-def build_rom_geometry(model_spec):
+def build_rom_geometry(model_spec, progress_callback=None):
+    """progress_callback(fraction, stage_text), if given, is called as the
+    build goes along (fraction 0..1), so a GUI can show a progress bar. The
+    core itself never touches the GUI."""
     build = ROMGeometryBuild(model_spec=model_spec)
     engine_axis = model_spec.engine_axis
     fuzzy_tolerance = model_spec.fuzzy_tolerance
 
+    def report_progress(fraction, stage_text):
+        if progress_callback is not None:
+            progress_callback(fraction, stage_text)
+
     # 1. Regions -> cell solids.
-    for region_spec in model_spec.regions:
+    region_count = max(len(model_spec.regions), 1)
+    for region_position, region_spec in enumerate(model_spec.regions):
+        report_progress(0.25 * region_position / region_count, f"Cutting region {region_spec.name} into cells")
         region_geometry = build_region_geometry(region_spec, engine_axis, fuzzy_tolerance)
         build.region_geometries.append(region_geometry)
         build.errors.extend(region_geometry.errors)
@@ -110,11 +185,14 @@ def build_rom_geometry(model_spec):
         return build
 
     # 3. One generalFuse over every cell: shared sub-faces become interfaces.
-    sub_faces, cell_sub_face_ids, split_errors = split_cells_into_sub_faces(build.cells, fuzzy_tolerance, engine_axis)
+    report_progress(0.3, f"Finding shared faces between {len(build.cells)} cells")
+    sub_faces, cell_sub_face_ids, overlaps, split_errors = split_cells_into_sub_faces(build.cells, fuzzy_tolerance, engine_axis)
+    build.overlaps = overlaps
     build.sub_faces = sub_faces
     build.errors.extend(split_errors)
 
     # 4. Which boundary sub-faces lie on a picked patch face.
+    report_progress(0.4, "Assigning boundary faces to patches")
     cell_by_id = {cell.cell_id: cell for cell in build.cells}
     boundary_sub_faces = []
     for sub_face in sub_faces:
@@ -136,7 +214,10 @@ def build_rom_geometry(model_spec):
     ignored_region_pairs, ignored_warnings = parse_ignored_interfaces(model_spec.ignored_interfaces, region_names)
     build.warnings.extend(ignored_warnings)
 
-    build.refused_merges = build_cell_faces(build.cells, sub_faces, cell_sub_face_ids, patch_of_sub_face, ignored_region_pairs, engine_axis, fuzzy_tolerance)
+    def report_cell_face_progress(cell_fraction):
+        report_progress(0.45 + 0.35 * cell_fraction, "Building cell faces and distances")
+
+    build.refused_merges = build_cell_faces(build.cells, sub_faces, cell_sub_face_ids, patch_of_sub_face, ignored_region_pairs, engine_axis, fuzzy_tolerance, report_cell_face_progress)
     build.errors.extend(connect_interface_half_faces(build.cells))
     compute_cell_face_distances(build.cells, engine_axis, model_spec.radial_node_rule, fuzzy_tolerance)
 
@@ -169,7 +250,7 @@ def build_rom_geometry(model_spec):
                 build.unassigned_boundary_faces.append({"cell": cell.cell_id, "local_idx": cell_face.local_idx, "area": cell_face.area, "centroid": cell_face.centroid, "region": cell.region_name})
 
     # 7. Interfering CAD and gaps.
-    build.overlaps = find_cell_overlaps(build.cells)
+    report_progress(0.85, "Checking gaps between cells")
     overlapping_cell_pairs = {frozenset((overlap["cell_a"], overlap["cell_b"])) for overlap in build.overlaps}
     build.near_contacts, missed_contact_warnings = find_near_contacts(build.cells, fuzzy_tolerance, model_spec.near_contact_tolerance, overlapping_cell_pairs)
     build.warnings.extend(missed_contact_warnings)
@@ -178,4 +259,5 @@ def build_rom_geometry(model_spec):
     build.parameters, parameter_warnings = read_spreadsheet_parameters(model_spec.parameter_sheets)
     build.warnings.extend(parameter_warnings)
 
+    report_progress(1.0, "Done")
     return build

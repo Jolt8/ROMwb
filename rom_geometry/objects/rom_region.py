@@ -21,7 +21,7 @@ import FreeCAD as App
 import Part
 
 from rom_geometry.core.regions import RegionSpec, build_region_geometry
-from rom_geometry.objects.object_helpers import global_shape, length_property_text, reference_element_kind, reference_position, report_to_console
+from rom_geometry.objects.object_helpers import plain_sub_path, global_shape, length_property_text, reference_element_kind, reference_position, report_to_console
 from rom_geometry.objects.rom_model import engine_axis_of_model, rom_model_of
 
 
@@ -148,7 +148,7 @@ def apply_limit_references(region_object, engine_axis):
             continue
 
         top_object, sub_names = reference_value
-        reference_label = f"{top_object.Label}.{sub_names[0] if sub_names else ''}".rstrip(".")
+        reference_label = f"{top_object.Label}.{plain_sub_path(sub_names[0]) if sub_names else ''}".rstrip(".")
 
         # Same element name, different kind of element: the CAD was edited
         # and the name now points somewhere else. Moving is fine; changing
@@ -205,7 +205,7 @@ def limit_definition_text(region_object, limit_name):
     if reference_value is not None and reference_value[0] is not None:
         top_object, sub_names = reference_value
         sub_name = sub_names[0] if sub_names else ""
-        reference_text = f"reference {top_object.Document.Name}#{top_object.Label}.{sub_name}".rstrip(".")
+        reference_text = f"reference {top_object.Document.Name}#{top_object.Label}.{plain_sub_path(sub_name)}".rstrip(".")
         limit_offset = getattr(region_object, f"{limit_name}Offset").Value
         if limit_offset != 0:
             reference_text += f" {'+' if limit_offset > 0 else '-'} {abs(limit_offset):.12g} mm"

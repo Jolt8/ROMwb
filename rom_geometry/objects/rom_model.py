@@ -42,6 +42,8 @@ class ROMModel:
         if property_name in PROPERTIES_THAT_CHANGE_REGIONS:
             for region_object in rom_regions_of_model(obj):
                 region_object.touch()
+            for patch_object in rom_patches_of_model(obj):
+                patch_object.touch()
 
     def execute(self, obj):
         pass
@@ -77,6 +79,10 @@ def rom_regions_of_model(model_object):
     return [child for child in model_object.Group if object_type(child) == "ROMRegion"]
 
 
+def rom_patches_of_model(model_object):
+    return [child for child in model_object.Group if object_type(child) == "ROMBoundaryPatch"]
+
+
 def engine_axis_of_model(model_object):
     """Engine axis from the linked LCS (its local Z), else global Z."""
     if model_object is None or model_object.Axis is None:
@@ -84,13 +90,13 @@ def engine_axis_of_model(model_object):
     return EngineAxis.from_placement(model_object.Axis.getGlobalPlacement())
 
 
-def validate_rom_model(model_object):
+def validate_rom_model(model_object, progress_callback=None):
     """Recompute, build and validate. Returns (build, report)."""
     from rom_geometry.core.model_build import build_rom_geometry
     from rom_geometry.core.validation import validate_rom_geometry
 
     model_object.Document.recompute()
-    build = build_rom_geometry(model_spec_from_rom_model(model_object))
+    build = build_rom_geometry(model_spec_from_rom_model(model_object), progress_callback)
     report = validate_rom_geometry(build)
     return build, report
 
@@ -115,7 +121,7 @@ def apply_n_axial_cells_overrides(model_object, n_axial_cells_overrides):
             region_object.NAxialCells = n_axial_cells
 
 
-def export_rom_model(model_object, output_path=None, n_axial_cells_overrides=None):
+def export_rom_model(model_object, output_path=None, n_axial_cells_overrides=None, progress_callback=None):
     """Recompute, validate and write the JSON (to ExportPath by default).
 
     n_axial_cells_overrides: optional {region_name: n} ("*" = all regions),
@@ -139,22 +145,27 @@ def export_rom_model(model_object, output_path=None, n_axial_cells_overrides=Non
         apply_n_axial_cells_overrides(model_object, ordered_overrides)
 
     model_object.Document.recompute()
-    return export_rom_geometry(model_spec_from_rom_model(model_object), output_path)
+    return export_rom_geometry(model_spec_from_rom_model(model_object), output_path, progress_callback)
 
 
 def model_spec_from_rom_model(model_object):
     """Collect everything the core needs from the document objects."""
+    from rom_geometry.objects.rom_boundary_patch import boundary_patch_spec_from_object
     from rom_geometry.objects.rom_region import region_spec_from_object
 
     region_specs = []
     for region_object in rom_regions_of_model(model_object):
         region_specs.append(region_spec_from_object(region_object))
 
+    boundary_patch_specs = []
+    for patch_object in rom_patches_of_model(model_object):
+        boundary_patch_specs.append(boundary_patch_spec_from_object(patch_object, model_object.FuzzyTolerance.Value))
+
     source_document_path = model_object.Document.FileName.replace("\\", "/")
 
     return ROMModelSpec(
         regions=region_specs,
-        boundary_patches=[],
+        boundary_patches=boundary_patch_specs,
         engine_axis=engine_axis_of_model(model_object),
         fuzzy_tolerance=model_object.FuzzyTolerance.Value,
         near_contact_tolerance=model_object.NearContactTolerance.Value,

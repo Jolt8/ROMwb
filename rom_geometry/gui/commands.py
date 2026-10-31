@@ -9,13 +9,15 @@ anywhere, that one is used.
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtGui
+from PySide import QtGui
 
 from rom_geometry.core.export_json import ExportRefusedError
 from rom_geometry.gui import icon_path
+from rom_geometry.gui.progress import BuildProgressDialog
 from rom_geometry.gui.view_providers import attach_view_provider
 from rom_geometry.objects.object_helpers import object_type
 from rom_geometry.objects.rom_model import create_rom_model, export_rom_model, find_rom_models, validate_rom_model
+from rom_geometry.objects.rom_boundary_patch import create_boundary_patch
 from rom_geometry.objects.rom_region import create_rom_region
 from rom_geometry.objects.source_features import create_fastener_parts
 
@@ -130,6 +132,51 @@ class SplitFastenerCommand:
             App.Console.PrintMessage(f"ROM Geometry: {fastener_part.Label}: {fastener_part.Status}\n")
 
 
+class AddBoundaryPatchCommand:
+    def GetResources(self):
+        return {"Pixmap": icon_path("rom_patch.svg"), "MenuText": "Add Boundary Patch", "ToolTip": "Name the selected CAD faces as a boundary patch (e.g. flat_plate_ambient_heat_exchange). Select the faces in the assembly's 3D view first."}
+
+    def IsActive(self):
+        return App.ActiveDocument is not None
+
+    def Activated(self):
+        from rom_geometry.gui.boundary_patch_task_panel import selected_faces
+
+        picked_faces = selected_faces()
+        model_object = find_target_model(create_if_missing=True)
+        if model_object is None:
+            return
+        doc = model_object.Document
+
+        doc.openTransaction("Add boundary patch")
+        patch_object = create_boundary_patch(model_object, None, picked_faces)
+        attach_view_provider(patch_object)
+        doc.commitTransaction()
+        doc.recompute()
+
+        Gui.Selection.clearSelection()
+        Gui.getDocument(doc.Name).setEdit(patch_object.Name, 0)
+
+
+class ReviewInterfacesCommand:
+    def GetResources(self):
+        return {"Pixmap": icon_path("rom_review.svg"), "MenuText": "Review Interfaces", "ToolTip": "List every interface between regions (with area and an Ignore box), the near-contacts and the unassigned outer surfaces. Click a row to highlight it."}
+
+    def IsActive(self):
+        return App.ActiveDocument is not None
+
+    def Activated(self):
+        from rom_geometry.gui.interface_review_panel import InterfaceReviewPanel
+
+        model_object = find_target_model(create_if_missing=False)
+        if model_object is None:
+            QtGui.QMessageBox.information(Gui.getMainWindow(), "ROM Geometry", "No ROM model found.")
+            return
+        with BuildProgressDialog("Building interfaces") as progress:
+            review_panel = InterfaceReviewPanel(model_object, progress.update)
+        Gui.Control.showDialog(review_panel)
+
+
 class ValidateCommand:
     def GetResources(self):
         return {"Pixmap": icon_path("rom_validate.svg"), "MenuText": "Validate", "ToolTip": "Build all cells and interfaces and run every check."}
@@ -142,11 +189,8 @@ class ValidateCommand:
         if model_object is None:
             QtGui.QMessageBox.information(Gui.getMainWindow(), "ROM Geometry", "No ROM model found.")
             return
-        QtGui.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-        try:
-            build, report = validate_rom_model(model_object)
-        finally:
-            QtGui.QApplication.restoreOverrideCursor()
+        with BuildProgressDialog("Validating") as progress:
+            build, report = validate_rom_model(model_object, progress.update)
         summary_text = f"{len(build.cells)} cells, {len(build.facetsets)} face sets\n\n"
         show_text_report(f"Validate {model_object.Label}", summary_text + report.as_text())
 
@@ -171,7 +215,8 @@ class ExportCommand:
             model_object.ExportPath = chosen_path
 
         try:
-            build, report, export = export_rom_model(model_object)
+            with BuildProgressDialog("Exporting") as progress:
+                build, report, export = export_rom_model(model_object, progress_callback=progress.update)
         except ExportRefusedError as refusal:
             show_text_report("Export refused", "Nothing was written.\n\n" + refusal.report.as_text())
             return
@@ -183,6 +228,8 @@ TOOLBAR_COMMANDS = [
     "ROMGeometry_CreateModel",
     "ROMGeometry_AddRegion",
     "ROMGeometry_SplitFastener",
+    "ROMGeometry_AddBoundaryPatch",
+    "ROMGeometry_ReviewInterfaces",
     "ROMGeometry_Validate",
     "ROMGeometry_Export",
 ]
@@ -190,5 +237,7 @@ TOOLBAR_COMMANDS = [
 Gui.addCommand("ROMGeometry_CreateModel", CreateROMModelCommand())
 Gui.addCommand("ROMGeometry_AddRegion", AddRegionCommand())
 Gui.addCommand("ROMGeometry_SplitFastener", SplitFastenerCommand())
+Gui.addCommand("ROMGeometry_AddBoundaryPatch", AddBoundaryPatchCommand())
+Gui.addCommand("ROMGeometry_ReviewInterfaces", ReviewInterfacesCommand())
 Gui.addCommand("ROMGeometry_Validate", ValidateCommand())
 Gui.addCommand("ROMGeometry_Export", ExportCommand())

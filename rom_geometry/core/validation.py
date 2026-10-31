@@ -2,7 +2,8 @@
 
 Errors refuse the export. Warnings are reported but allowed: they describe
 modelling choices (gaps, adiabatic surfaces, unused parts of bodies) that the
-user should see and decide on.
+user should see and decide on. Notes are information only (e.g. a stepped
+contact kept as two faces); nothing needs doing about them.
 """
 
 from dataclasses import dataclass, field
@@ -24,17 +25,20 @@ CLOSURE_RELATIVE_TOLERANCE_TESSELLATED = 1.0e-3
 class ValidationReport:
     errors: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
+    notes: list = field(default_factory=list)
 
     @property
     def is_valid(self):
         return len(self.errors) == 0
 
     def as_text(self):
-        report_lines = [f"{len(self.errors)} error(s), {len(self.warnings)} warning(s)"]
+        report_lines = [f"{len(self.errors)} error(s), {len(self.warnings)} warning(s), {len(self.notes)} note(s)"]
         for error in self.errors:
             report_lines.append(f"ERROR:   {error}")
         for warning in self.warnings:
             report_lines.append(f"WARNING: {warning}")
+        for note in self.notes:
+            report_lines.append(f"NOTE:    {note}")
         return "\n".join(report_lines)
 
 
@@ -167,9 +171,9 @@ def validate_rom_geometry(build):
         region_name = unassigned_face["region"]
         unassigned_area_by_region[region_name] = unassigned_area_by_region.get(region_name, 0.0) + unassigned_face["area"]
     for region_name, unassigned_area in unassigned_area_by_region.items():
-        report.warnings.append(f"region '{region_name}': {unassigned_area * 1.0e-6:.6g} m^2 of boundary has no patch (adiabatic unless you add one)")
+        report.warnings.append(f"region '{region_name}': {unassigned_area:.6g} mm^2 of boundary has no patch (adiabatic unless you add one)")
 
-    # --- Warning: approximate distances, refused merges, zero distances -----
+    # --- Warning: approximate and zero distances; note: stepped contacts ----
     for cell in build.cells:
         for cell_face in cell.faces:
             if cell_face.distance_method == "approximate":
@@ -177,7 +181,7 @@ def validate_rom_geometry(build):
             if cell_face.half_cell_distance <= 1.0e-9:
                 report.warnings.append(f"cell {cell.cell_id} ({cell.region_name}) face {cell_face.local_idx}: half-cell distance is zero (the face passes through the cell centroid)")
 
-    for refused_merge in build.refused_merges:
-        report.warnings.append(f"refused merge: {refused_merge}")
+    for stepped_contact_note in build.refused_merges:
+        report.notes.append(stepped_contact_note)
 
     return report

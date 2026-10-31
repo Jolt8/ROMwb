@@ -16,12 +16,8 @@ boundary faces, the gaps and the overlaps, and computes the distances.
 |---|---|---|
 | 1 | headless geometry core, fixture, tests; merge parts / split fasteners | **done** |
 | 2 | the workbench: toolbar, `ROMModel` / `ROMRegion` objects (incl. inverse / fluid regions, LCS and face references), region task panel, coloured preview, Split Fastener, Validate / Export (text report), `scripts/export_headless.py` | **done** |
-| 3 | boundary-patch picking + fingerprints, interface review panel with ignore toggles | core functions done (`core/boundary_patches.py`), GUI not started |
+| 3 | boundary patches (face picking, fingerprint re-matching, re-pick), interface review panel with ignore toggles and 3D highlighting | **done** |
 | 4 | Julia loader in FVMFramework | not started |
-
-Until Phase 3, exports have no boundary patches: every outer surface is listed
-in `unassigned_boundary_faces`. Interfaces can already be ignored by typing
-`region_a|region_b` into the model's `IgnoredInterfaces` property.
 
 ## Install
 
@@ -101,7 +97,29 @@ selector.
    body B. You get two `ROMFastenerPart`s inside the ROM model, cut on the
    bodies' contact plane; add each to its body's region. Use
    `UseCustomPlane` when the bodies don't touch.
-6. **Validate** shows every error and warning. **Export JSON** validates
+6. **Add Boundary Patch.** Select CAD faces in the assembly's 3D view (Ctrl
+   for several) and click it. The patch panel lets you name it (e.g.
+   `flat_plate_ambient_heat_exchange`; no `__`), add more selected faces,
+   remove faces, or **Re-pick** one. Every cell half-face lying on those
+   faces goes into the patch's face set. Surfaces without a patch are
+   adiabatic and are listed, so that is a visible choice.
+
+   Patch faces are re-found by a geometric fingerprint, never by their
+   `FaceN` number:
+   - **renumbered by a CAD edit:** the stored name is updated;
+   - **moved or resized a little:** accepted, with a warning;
+   - **gone or ambiguous:** the export stops with an error naming the patch
+     and the face, and you re-pick it.
+7. **Review Interfaces** lists:
+   - every interface between two regions, with its area and an **Ignore** box;
+   - the near-contacts (gaps), with their size;
+   - each region's unassigned outer surface.
+
+   Click a row to highlight it in the 3D view (drawn on top, so interfaces
+   inside the engine are visible). **OK** saves the ticked pairs to
+   `IgnoredInterfaces`. An ignored interface is exported as a boundary with
+   no patch, so no heat crosses it.
+8. **Validate** shows every error and warning. **Export JSON** validates
    first and refuses to write if there are errors.
 
 Headless export of a saved ROM document (linked documents open automatically):
@@ -141,8 +159,9 @@ rom_geometry/
   objects/              FeaturePython objects (no GUI imports; recompute headless)
     rom_model.py        ROMModel group; document → core spec; validate / export
     rom_region.py       ROMRegion
+    rom_boundary_patch.py  ROMBoundaryPatch (fingerprints, re-matching)
     source_features.py  ROMFastenerPart (and the old ROMCavity, kept for older documents)
-  gui/                  view providers, commands, region task panel
+  gui/                  view providers, commands, region / patch / interface-review panels, 3D highlighting
   resources/icons/
   freecad_bootstrap.py  re-launch scripts under FreeCAD's bundled Python 3.11
 scripts/export_headless.py

@@ -83,6 +83,38 @@ class ROMRegionViewProvider(ROMBaseViewProvider):
         return True
 
 
+class ROMBoundaryPatchViewProvider(ROMBaseViewProvider):
+    """Patch faces drawn opaque in the patch colour, with thick edges, so
+    they stand out against the semi-transparent regions."""
+    icon_name = "rom_patch.svg"
+
+    def attach(self, view_object):
+        self.Object = view_object.Object
+        view_object.LineWidth = 3.0
+        set_shape_color(view_object, view_object.Object.Color)
+
+    def updateData(self, obj, property_name):
+        if property_name == "Color" and obj.ViewObject is not None:
+            set_shape_color(obj.ViewObject, obj.Color)
+
+    def doubleClicked(self, view_object):
+        view_object.Document.setEdit(view_object.Object.Name, 0)
+        return True
+
+    def setEdit(self, view_object, mode):
+        if mode != 0:
+            return False
+        from rom_geometry.gui.boundary_patch_task_panel import BoundaryPatchTaskPanel
+        patch_object = view_object.Object
+        patch_object.Document.openTransaction(f"Edit patch {patch_object.Label}")
+        Gui.Control.showDialog(BoundaryPatchTaskPanel(patch_object))
+        return True
+
+    def unsetEdit(self, view_object, mode):
+        Gui.Control.closeDialog()
+        return True
+
+
 class ROMCavityViewProvider(ROMBaseViewProvider):
     icon_name = "rom_cavity.svg"
 
@@ -99,6 +131,7 @@ class ROMFastenerPartViewProvider(ROMBaseViewProvider):
 VIEW_PROVIDER_BY_TYPE = {
     "ROMModel": ROMModelViewProvider,
     "ROMRegion": ROMRegionViewProvider,
+    "ROMBoundaryPatch": ROMBoundaryPatchViewProvider,
     "ROMCavity": ROMCavityViewProvider,
     "ROMFastenerPart": ROMFastenerPartViewProvider,
 }
